@@ -198,7 +198,7 @@ def chat_with_tools(
                             except json.JSONDecodeError:
                                 tool_args = {}
                             try:
-                                result = tool_registry.execute(tc["name"], tool_args)
+                                result = tool_registry.execute(tc["name"], tool_args, timeout=cfg["tool_timeout"])
                             except Exception as exc:
                                 result = f"工具执行异常: {exc}"
                             yield {
@@ -252,7 +252,7 @@ def chat_with_tools(
                             tool_args = {}
 
                         try:
-                            result = tool_registry.execute(tool_name, tool_args)
+                            result = tool_registry.execute(tool_name, tool_args, timeout=cfg["tool_timeout"])
                         except Exception as exc:
                             result = f"工具执行异常: {exc}"
                         yield {

@@ -23,6 +23,7 @@ _DEFAULTS = {
     "max_tokens": 2048,
     "temperature": 0.7,
     "port": 5000,
+    "tool_timeout": 180,
     "system_prompt": (
         "你是一个有帮助的AI助手。\n\n"
         "## 工具选择规则（重要）\n"
@@ -44,10 +45,11 @@ _ENV_MAP = {
     "LLM_TEMPERATURE": "temperature",
     "LLM_SYSTEM_PROMPT": "system_prompt",
     "PORT": "port",
+    "LLM_TOOL_TIMEOUT": "tool_timeout",
 }
 
 # 需要转为 int 的键
-_INT_KEYS = {"max_tokens", "port"}
+_INT_KEYS = {"max_tokens", "port", "tool_timeout"}
 
 # 需要转为 float 的键
 _FLOAT_KEYS = {"temperature"}

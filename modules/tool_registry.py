@@ -6,6 +6,10 @@
 
 import threading
 
+import concurrent.futures
+
+_executor = concurrent.futures.ThreadPoolExecutor(max_workers=8, thread_name_prefix="tool")
+
 _lock = threading.Lock()
 _tools = {}  # name -> {definition, executor}
 
@@ -47,14 +51,19 @@ def get_definitions_by_names(names: list) -> list:
         ]
 
 
-def execute(name: str, args: dict) -> str:
-    """执行指定工具，返回结果字符串。"""
+def execute(name: str, args: dict, timeout: float = None) -> str:
+    """执行指定工具，返回结果字符串。timeout 不为 None 时限制执行时长，超时返回提示。"""
     with _lock:
         tool = _tools.get(name)
     if not tool:
         return f"错误: 未知工具 '{name}'"
     try:
-        result = tool["executor"](args)
-        return str(result)
+        if timeout is None:
+            return str(tool["executor"](args))
+        future = _executor.submit(tool["executor"], args)
+        try:
+            return str(future.result(timeout=timeout))
+        except concurrent.futures.TimeoutError:
+            return f"工具执行超时（超过 {timeout} 秒），请简化请求或稍后重试"
     except Exception as e:
         return f"工具执行错误: {str(e)}"
