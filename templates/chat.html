@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent编辑器 · AI 对话</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/chat.css">
+</head>
+<body>
+    <div id="chat-app">
+        <!-- ======== 顶部工具栏 ======== -->
+        <header id="chat-header">
+            <div class="chat-header-left">
+                <a href="/" class="logo-link" title="返回首页">
+                    <span class="logo">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1.5" fill="currentColor"/>
+                            <circle cx="16" cy="10" r="1.5" fill="currentColor"/>
+                            <path d="M8 15c1.5 2 6.5 2 8 0" stroke-linecap="round"/>
+                        </svg>
+                        <strong>Agent编辑器</strong>
+                        <span class="logo-sub">AI 对话</span>
+                    </span>
+                </a>
+            </div>
+            <div class="chat-header-center">
+                <span class="toolbar-badge" id="chat-project-badge" style="display:none;"></span>
+                <select id="chat-skill-select" style="font-size:11px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg-input);color:var(--text);max-width:160px;cursor:pointer;" title="选择技能模式">
+                    <option value="">🎯 通用模式</option>
+                    <option value="__smart__" style="color:#7c3aed;">🧠 智能模式</option>
+                </select>
+                <span class="toolbar-badge" id="chat-model">模型: --</span>
+            </div>
+            <div class="chat-header-right">
+                <a href="/" class="tb-btn" title="返回首页">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                        <polyline points="9 22 9 12 15 12 15 22"/>
+                    </svg>
+                    首页
+                </a>
+                <a href="/editor" class="tb-btn" title="返回管理后台">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="2" width="20" height="20" rx="4"/>
+                        <line x1="7" y1="8" x2="17" y2="8"/>
+                        <line x1="7" y1="12" x2="17" y2="12"/>
+                        <line x1="7" y1="16" x2="12" y2="16"/>
+                    </svg>
+                    管理后台
+                </a>
+                <a href="/projects" class="tb-btn" title="项目管理">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="2" width="20" height="20" rx="4"/>
+                        <line x1="7" y1="8" x2="17" y2="8"/>
+                        <line x1="7" y1="12" x2="17" y2="12"/>
+                        <line x1="7" y1="16" x2="12" y2="16"/>
+                    </svg>
+                    项目
+                </a>
+                <button class="tb-btn" id="btn-clear-chat" title="清空对话">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    清空
+                </button>
+            </div>
+        </header>
+
+        <!-- ======== 主区域：文件面板 + 消息 + 工具面板 ======== -->
+        <div id="chat-main">
+            <!-- 左侧：生成文件面板 -->
+            <aside id="left-files-panel">
+                <div class="files-panel-header">
+                    <span>📁</span> 生成文件
+                    <button class="files-refresh-btn" id="files-refresh-btn" title="刷新文件列表">🔄</button>
+                    <button class="files-clear-btn" id="files-clear-btn" title="清空所有临时文件（不影响已保存到本地的文件）">🗑️</button>
+                </div>
+                <div class="files-panel-body" id="files-panel-body">
+                    <div class="files-empty">
+                        <div class="files-empty-icon">📭</div>
+                        <div class="files-empty-text">暂无生成文件</div>
+                        <div class="files-empty-hint">AI 工具生成的文件<br>会显示在这里</div>
+                    </div>
+                </div>
+                <div class="files-panel-footer">
+                    <div class="files-save-dir" id="files-save-dir" title="点击选择存储目录">📁 未选择目录</div>
+                    <button class="files-dir-btn" id="files-dir-btn" title="选择存储目录">📂</button>
+                    <button class="files-save-btn" id="files-save-btn" title="保存全部文件到选中目录">💾</button>
+                </div>
+            </aside>
+
+            <!-- 消息区 -->
+            <div id="chat-messages">
+                <div class="chat-empty" id="chat-empty">
+                    <div class="chat-empty-icon">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.3">
+                            <circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1.5" fill="currentColor"/>
+                            <circle cx="16" cy="10" r="1.5" fill="currentColor"/>
+                            <path d="M8 15c1.5 2 6.5 2 8 0" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="chat-empty-text">开始一段新的对话吧</div>
+                    <div class="chat-empty-hint">在下方输入消息，与 AI 实时交流</div>
+                </div>
+            </div>
+
+            <!-- 右侧面板：工具调用 + 对话记忆（上下各半） -->
+            <div id="right-sidebar">
+                <aside id="tool-monitor">
+                    <div class="panel-header tm-header">
+                        <span>🔧</span> 工具调用
+                        <button class="tm-clear-btn" id="tm-clear" title="清空日志">✕</button>
+                    </div>
+                    <div class="tm-body" id="tm-body">
+                        <div class="tm-empty">
+                            <div class="tm-empty-icon">🔧</div>
+                            <div class="tm-empty-text">发送消息后<br>在此查看工具调用</div>
+                        </div>
+                    </div>
+                </aside>
+
+                <aside id="memory-panel">
+                    <div class="mem-header">
+                        <span>🧠</span> 对话记忆
+                        <button class="mem-clear-btn" id="mem-clear-btn" title="清空对话记忆">🗑️</button>
+                    </div>
+                    <div class="mem-body">
+                        <div class="mem-stat">
+                            <span class="mem-stat-label">Token 用量</span>
+                            <span class="mem-stat-value" id="mem-token-count">0 / ~28K</span>
+                        </div>
+                        <div class="mem-bar">
+                            <div class="mem-bar-fill" id="mem-bar-fill" style="width:0%;"></div>
+                        </div>
+                        <div id="mem-threshold-row" style="display:none;align-items:center;gap:6px;margin-top:6px;font-size:10px;">
+                            <span style="color:var(--text-muted);">自动总结:</span>
+                            <input type="number" id="mem-auto-threshold" value="14000"
+                                style="width:55px;font-size:10px;padding:1px 3px;border:1px solid var(--border);border-radius:3px;background:var(--bg-input);color:var(--text);"
+                                min="1000" step="500" title="Token 阈值">
+                            <span style="color:var(--text-muted);">tokens</span>
+                        </div>
+                        <button class="module-btn secondary" id="mem-summarize-btn"
+                            style="width:100%;margin-top:6px;font-size:10px;padding:3px 6px;">
+                            📦 压缩记忆
+                        </button>
+                    </div>
+                </aside>
+            </div>
+        </div>
+
+        <!-- ======== 输入栏 ======== -->
+        <div id="chat-input-bar">
+            <div class="input-wrapper">
+                <input
+                    id="chat-input"
+                    class="llm-input"
+                    placeholder="输入消息，Enter 发送，Shift+Enter 换行…"
+                    autofocus
+                >
+                <button id="btn-send" class="llm-send-btn">发送</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast-container"></div>
+
+    <script src="/static/common.js"></script>
+    <script src="/static/chat.js"></script>
+</body>
+</html>

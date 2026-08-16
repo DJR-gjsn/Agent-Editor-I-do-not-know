@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python server.py)",
+      "Bash(node *)",
+      "Bash(python -m py_compile server.py)",
+      "Bash(python -m py_compile modules/web_search.py)",
+      "Bash(curl -s http://localhost:5000/api/health)",
+      "Bash(start *)",
+      "Bash(python *)",
+      "Bash(curl -s http://localhost:5000/static/style.css)",
+      "Bash(python3 -c \"import sys; css=sys.stdin.read\\(\\); o=css.count\\('{'\\); c=css.count\\('}'\\); print\\(f'Open: {o}, Close: {c}, Balanced: {o==c}'\\)\")",
+      "Bash(mkdir -p \"D:\\\\myxiangfamsicx\")",
+      "Bash(pip install *)"
+    ]
+  }
+}

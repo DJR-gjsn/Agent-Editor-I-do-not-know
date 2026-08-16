@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# 测试报告产物
+*.xlsx
+report_summary.txt
+*_results.json
+*_final.json
+*_detailed.json
+
+# 备份文件
+*.bak
+
+# SDD 工作区（任务简报/报告/审查包/进度账本）
+.superpowers/
+
+# 日志
+*.log

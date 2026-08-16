@@ -1,0 +1,340 @@
+/* ============================================================
+   wybzd · AI 对话 — 页面布局样式
+   复用 style.css 中的 CSS 变量与组件样式
+   ============================================================ */
+
+/* --- 页面布局 --- */
+#chat-app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background: var(--bg-body);
+}
+
+/* ============================================================
+   顶部工具栏
+   ============================================================ */
+#chat-header {
+    display: flex;
+    align-items: center;
+    height: 50px;
+    min-height: 50px;
+    padding: 0 20px;
+    background: var(--bg-header);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    z-index: 100;
+    gap: 16px;
+}
+
+.chat-header-left { flex: 0 0 auto; }
+.chat-header-center { flex: 1; display: flex; justify-content: center; }
+.chat-header-right { flex: 0 0 auto; display: flex; gap: 8px; }
+
+/* ============================================================
+   左侧文件面板
+   ============================================================ */
+#chat-main {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+    min-height: 0;
+}
+
+#left-files-panel {
+    width: 210px;
+    min-width: 180px;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    background: var(--bg-sidebar);
+    overflow: hidden;
+}
+
+.files-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono);
+}
+
+.files-refresh-btn, .files-clear-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 11px;
+    padding: 2px 5px;
+    border-radius: var(--radius-sm);
+    line-height: 1;
+}
+.files-refresh-btn { margin-left: auto; }
+.files-refresh-btn:hover { color: var(--text-primary); background: var(--bg-card-hover); }
+.files-clear-btn:hover { color: var(--danger); background: var(--danger-bg); border-color: var(--danger); }
+
+/* 文件列表 body */
+.files-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px;
+}
+
+/* 空状态 */
+.files-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 10px;
+    text-align: center;
+    color: var(--text-muted);
+}
+.files-empty-icon { font-size: 24px; margin-bottom: 8px; opacity: 0.5; }
+.files-empty-text { font-size: 11px; font-weight: 600; margin-bottom: 4px; }
+.files-empty-hint { font-size: 10px; line-height: 1.4; opacity: 0.6; }
+
+/* 单个文件项 */
+.file-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    cursor: default;
+    transition: background 0.15s;
+}
+.file-item:hover { background: var(--bg-card-hover); }
+.file-item-icon { font-size: 16px; flex-shrink: 0; }
+.file-item-info { flex: 1; min-width: 0; overflow: hidden; }
+.file-item-name {
+    font-size: 11px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: var(--font-mono);
+}
+.file-item-meta {
+    display: flex;
+    gap: 8px;
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 1px;
+}
+.file-item-size { flex-shrink: 0; }
+.file-item-time { flex-shrink: 0; }
+
+/* 底部操作栏 */
+.files-panel-footer {
+    padding: 8px 10px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.files-save-dir {
+    flex: 1;
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: var(--font-mono);
+    padding: 2px 0;
+}
+
+.files-dir-btn, .files-save-btn {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 3px 7px;
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+}
+.files-dir-btn:hover, .files-save-btn:hover {
+    background: var(--bg-card-hover);
+    color: var(--text-primary);
+}
+.files-save-btn {
+    background: var(--primary-bg);
+    color: var(--primary);
+    border-color: var(--primary-border);
+}
+.files-save-btn:hover {
+    background: var(--primary);
+    color: #000;
+}
+
+/* ============================================================
+   消息区
+   ============================================================ */
+
+#chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    scroll-behavior: smooth;
+    min-width: 0;
+}
+
+/* 消息居中约束 */
+#chat-messages .chat-bubble {
+    max-width: 65%;
+}
+
+@media (min-width: 900px) {
+    #chat-messages {
+        padding: 28px calc((100% - 800px) / 2 + 20px);
+    }
+}
+
+/* --- 空状态 --- */
+.chat-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 20px;
+    text-align: center;
+    flex: 1;
+}
+
+.chat-empty-icon { margin-bottom: 16px; color: var(--text-muted); }
+
+.chat-empty-text {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.chat-empty-hint {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+/* ============================================================
+   输入栏
+   ============================================================ */
+#chat-input-bar {
+    padding: 14px 20px;
+    background: var(--bg-white);
+    border-top: 1px solid var(--border);
+}
+
+.input-wrapper {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+@media (min-width: 900px) {
+    .input-wrapper {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+}
+
+#chat-input {
+    flex: 1;
+    padding: 10px 16px;
+    font-size: 14px;
+}
+
+#btn-send {
+    padding: 10px 24px;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+/* ============================================================
+   响应式
+   ============================================================ */
+@media (max-width: 800px) {
+    #left-files-panel { display: none; }
+}
+
+@media (max-width: 600px) {
+    #chat-header { padding: 0 12px; gap: 8px; }
+    .logo-sub { display: none; }
+    #chat-messages { padding: 16px 12px; gap: 10px; }
+    #chat-messages .chat-bubble { max-width: 85%; }
+    #chat-input-bar { padding: 10px 12px; }
+    #right-sidebar { display: none; }
+}
+
+/* --- 机能风覆盖 --- */
+#chat-header { height: 44px; min-height: 44px; background: var(--bg-header); border-color: var(--border); }
+#chat-messages .chat-bubble { font-family: var(--font-mono); border-radius: var(--radius-sm); border: 1px solid var(--border); }
+#chat-messages .chat-bubble.user { background: var(--primary-bg); color: var(--primary); border-color: var(--primary-border); }
+#chat-messages .chat-bubble.assistant { background: var(--bg-input); color: var(--text-primary); }
+#chat-input { background: var(--bg-input); border-color: var(--border); color: var(--text-primary); font-family: var(--font-mono); font-size: 11px; }
+#chat-send-btn { background: var(--primary); color: #000; font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-radius: var(--radius-sm); }
+.left-panel { background: var(--bg-sidebar); border-color: var(--border); }
+.left-panel-header { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 1px; font-size: 10px; color: var(--text-muted); }
+
+/* --- 玻璃态覆盖 --- */
+[data-theme="glass"] #chat-messages .chat-bubble { font-family: var(--font); font-size: 13px; }
+[data-theme="glass"] #chat-input { font-family: var(--font); font-size: 13px; }
+[data-theme="glass"] #chat-send-btn { font-family: var(--font); text-transform: none; letter-spacing: 0; }
+[data-theme="glass"] #left-files-panel { background: rgba(255,255,255,0.03); backdrop-filter: blur(10px); }
+[data-theme="glass"] .files-panel-header { font-family: var(--font); text-transform: none; letter-spacing: 0; font-size: 12px; }
+[data-theme="glass"] .file-item-name { font-family: var(--font); }
+
+/* ============================================================
+   思考过程块（推理模型）
+   ============================================================ */
+.thinking-block {
+    margin-top: 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    font-size: 12px;
+    background: var(--bg-input);
+}
+.thinking-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    cursor: pointer;
+    user-select: none;
+    color: var(--text-muted);
+    font-weight: 500;
+    background: rgba(139, 92, 246, 0.06);
+}
+.thinking-header:hover {
+    background: rgba(139, 92, 246, 0.12);
+}
+.thinking-toggle {
+    font-size: 10px;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+}
+.thinking-body {
+    padding: 8px 12px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    max-height: 300px;
+    overflow-y: auto;
+    border-top: 1px solid var(--border);
+}
+
+/* dark theme override */
+[data-theme="industrial"] .thinking-header { background: rgba(139, 92, 246, 0.08); }
+[data-theme="industrial"] .thinking-header:hover { background: rgba(139, 92, 246, 0.15); }
+[data-theme="blue"] .thinking-block { background: rgba(255,255,255,0.04); }

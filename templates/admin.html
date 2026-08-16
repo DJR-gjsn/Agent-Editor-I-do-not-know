@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent编辑器 · 管理后台</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+    <div class="admin-app">
+        <!-- 顶部栏 -->
+        <header id="admin-header">
+            <div class="admin-header-left">
+                <a href="/" class="logo-link" title="返回首页">
+                    <span class="logo">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <rect x="2" y="2" width="20" height="20" rx="4"/>
+                            <line x1="7" y1="8" x2="17" y2="8"/>
+                            <line x1="7" y1="12" x2="17" y2="12"/>
+                            <line x1="7" y1="16" x2="12" y2="16"/>
+                        </svg>
+                        <strong>Agent编辑器</strong>
+                        <span class="logo-sub">管理后台</span>
+                    </span>
+                </a>
+            </div>
+            <div class="admin-header-right">
+                <button class="tb-btn" id="btn-settings" title="设置">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- 主区域 -->
+        <div class="admin-main">
+            <!-- 统计 -->
+            <div class="admin-stats">
+                <div class="admin-stat-card">
+                    <div class="admin-stat-value" id="stat-projects">--</div>
+                    <div class="admin-stat-label">Agent 项目</div>
+                </div>
+                <div class="admin-stat-card">
+                    <div class="admin-stat-value" id="stat-components">--</div>
+                    <div class="admin-stat-label">总组件数</div>
+                </div>
+                <div class="admin-stat-card">
+                    <div class="admin-stat-value" id="stat-connections">--</div>
+                    <div class="admin-stat-label">总连线数</div>
+                </div>
+            </div>
+
+            <!-- 快捷入口 -->
+            <div class="admin-section-title">快捷入口</div>
+            <div class="admin-links">
+                <a href="/projects" class="admin-link-card">
+                    <div class="admin-link-icon projects">📋</div>
+                    <div class="admin-link-text">
+                        <strong>项目管理</strong>
+                        <small>查看、创建和管理 Agent 项目</small>
+                    </div>
+                </a>
+                <a href="/editor" class="admin-link-card">
+                    <div class="admin-link-icon editor">🛠️</div>
+                    <div class="admin-link-text">
+                        <strong>Agent编辑器</strong>
+                        <small>可视化构建 Agent 工作流</small>
+                    </div>
+                </a>
+                <a href="/chat" class="admin-link-card">
+                    <div class="admin-link-icon chat">💬</div>
+                    <div class="admin-link-text">
+                        <strong>AI 对话</strong>
+                        <small>与 AI 实时交流</small>
+                    </div>
+                </a>
+            </div>
+
+            <!-- 系统信息 -->
+            <div class="admin-info">
+                <div class="admin-section-title">系统信息</div>
+                <div class="admin-info-row"><span>服务器状态</span><span style="color:#4caf50;">● 运行中</span></div>
+                <div class="admin-info-row"><span>API 模型</span><span id="info-model">--</span></div>
+                <div class="admin-info-row"><span>API 地址</span><span id="info-api-base">--</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast-container"></div>
+
+    <script src="/static/common.js"></script>
+    <script src="/static/admin.js"></script>
+</body>
+</html>

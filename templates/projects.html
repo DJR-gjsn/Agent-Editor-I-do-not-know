@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent编辑器 · 项目管理</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div id="projects-app">
+        <!-- ======== 顶部栏 ======== -->
+        <header id="proj-header">
+            <div class="proj-header-left">
+                <a href="/" class="logo-link" title="返回首页">
+                    <span class="logo">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <rect x="2" y="2" width="20" height="20" rx="4"/>
+                            <line x1="7" y1="8" x2="17" y2="8"/>
+                            <line x1="7" y1="12" x2="17" y2="12"/>
+                            <line x1="7" y1="16" x2="12" y2="16"/>
+                        </svg>
+                        <strong>Agent编辑器</strong>
+                        <span class="logo-sub">项目管理</span>
+                    </span>
+                </a>
+            </div>
+            <div class="proj-header-right">
+                <a href="/" class="tb-btn" title="返回首页" style="margin-right:4px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                        <polyline points="9 22 9 12 15 12 15 22"/>
+                    </svg>
+                    首页
+                </a>
+                <button class="tb-btn" id="btn-settings" title="设置" style="margin-right:4px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
+                <a href="/editor" class="tb-btn" title="打开编辑器">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="2" width="20" height="20" rx="2"/><polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    编辑器
+                </a>
+            </div>
+        </header>
+
+        <!-- ======== 新建按钮 ======== -->
+        <div id="proj-toolbar">
+            <button id="btn-new-project" class="proj-new-btn">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                新建 Agent 项目
+            </button>
+        </div>
+
+        <!-- ======== 项目列表 ======== -->
+        <div id="proj-grid"></div>
+
+        <!-- ======== 空状态 ======== -->
+        <div id="proj-empty" style="display:none;">
+            <div class="proj-empty-icon">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3">
+                    <rect x="2" y="2" width="20" height="20" rx="4"/>
+                    <line x1="7" y1="8" x2="17" y2="8"/>
+                    <line x1="7" y1="12" x2="17" y2="12"/>
+                    <line x1="7" y1="16" x2="12" y2="16"/>
+                </svg>
+            </div>
+            <div class="proj-empty-text">还没有项目</div>
+            <div class="proj-empty-hint">点击上方按钮创建第一个 Agent 项目</div>
+        </div>
+    </div>
+
+    <!-- 设置面板 -->
+    <div id="settings-overlay" class="settings-overlay" style="display:none;">
+        <div class="settings-panel">
+            <div class="settings-header">
+                <span>Settings</span>
+                <button class="settings-close" id="settings-close">&times;</button>
+            </div>
+            <div class="settings-body">
+                <div class="settings-group">
+                    <label class="settings-label">Theme / 主题</label>
+                    <div class="theme-options" id="theme-options">
+                        <button class="theme-option active" data-theme="industrial">
+                            <span class="theme-swatch industrial"></span>
+                            <span class="theme-info">
+                                <strong>Industrial</strong>
+                                <small>机能风 · 亮黄+黑灰</small>
+                            </span>
+                        </button>
+                        <button class="theme-option" data-theme="blue">
+                            <span class="theme-swatch blue"></span>
+                            <span class="theme-info">
+                                <strong>Professional</strong>
+                                <small>专业风 · 蓝+白</small>
+                            </span>
+                        </button>
+                        <button class="theme-option" data-theme="glass">
+                            <span class="theme-swatch glass"></span>
+                            <span class="theme-info">
+                                <strong>Glassmorphism</strong>
+                                <small>玻璃态 · 紫蓝渐变+毛玻璃</small>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast-container"></div>
+
+    <script src="/static/common.js"></script>
+    <script src="/static/projects.js"></script>
+</body>
+</html>
