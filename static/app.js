@@ -161,8 +161,12 @@ function serializeComponent(c) {
     return {
         id: c.id, type: c.type, size: c.size, x: c.x, y: c.y,
         messages: c.messages,
+        // apiKey 不写入布局（安全：避免密钥进入 git 仓库/服务器存储）；
+        // 密钥仅保留在组件内存与浏览器 localStorage 的 active-llm-config 中
         apiSettings: c.apiSettings ? {
-            ...c.apiSettings,
+            apiBase: c.apiSettings.apiBase,
+            model: c.apiSettings.model,
+            provider: c.apiSettings.provider,
             maxToolRounds: c.apiSettings.maxToolRounds || 50,
         } : c.apiSettings,
         activePromptId: c.activePromptId, activePromptContent: c.activePromptContent,
