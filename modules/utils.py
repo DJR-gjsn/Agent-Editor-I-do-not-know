@@ -181,3 +181,53 @@ def setup_logging(name: str = "wybzd", level: int = logging.INFO):
 def get_logger(name: str = "wybzd") -> logging.Logger:
     """获取 logger 实例"""
     return logging.getLogger(name)
+
+
+def with_heartbeat(events, idle_seconds: float = 15.0):
+    """
+    包装事件生成器：事件流空闲超过 idle_seconds 时产出 ("heartbeat", None)，
+    其余情况原样产出 ("event", event)。用于 SSE 长连接保活。
+    内部用 daemon 泵线程 + 队列实现空闲检测；生成器被关闭（GeneratorExit）
+    时会通知泵线程退出，避免线程泄漏。
+    """
+    import queue
+    import threading
+
+    q = queue.Queue(maxsize=16)
+    stop = threading.Event()
+
+    def _pump():
+        try:
+            for ev in events:
+                while not stop.is_set():
+                    try:
+                        q.put(("event", ev), timeout=0.2)
+                        break
+                    except queue.Full:
+                        continue
+                else:
+                    return
+            q.put(("done", None))
+        except Exception as exc:
+            try:
+                q.put(("error", exc))
+            except Exception:
+                pass
+
+    t = threading.Thread(target=_pump, daemon=True)
+    t.start()
+    try:
+        while True:
+            try:
+                kind, payload = q.get(timeout=idle_seconds)
+            except queue.Empty:
+                yield ("heartbeat", None)
+                continue
+            if kind == "done":
+                return
+            if kind == "error":
+                raise payload
+            yield (kind, payload)
+    except GeneratorExit:
+        stop.set()
+        raise

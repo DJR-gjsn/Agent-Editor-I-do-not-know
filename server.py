@@ -389,7 +389,13 @@ def chat():
             stream=True,  # 真正的 SSE 流式传输
         )
 
-        for event in events:
+        from modules.utils import with_heartbeat
+        hb_events = with_heartbeat(events, idle_seconds=15)
+        for hb_kind, hb_payload in hb_events:
+            if hb_kind == "heartbeat":
+                yield ": keep-alive\n\n"
+                continue
+            event = hb_payload
             etype = event["type"]
 
             if etype == "reasoning":
