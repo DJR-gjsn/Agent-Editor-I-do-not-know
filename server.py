@@ -349,6 +349,41 @@ def api_list_projects():
     return jsonify(projects)
 
 
+# 布局合并保护字段：传入为空时保留服务器已有值，防止自动保存意外清空对话历史
+_PROTECTED_LAYOUT_FIELDS = (
+    "messages", "searchHistory", "calcHistory", "codeHistory", "textHistory",
+    "planHistory", "reflHistory", "agentLog", "loopLog",
+    "execLastResult", "currentPlan", "wmStore", "vectorDocs",
+)
+
+
+def _merge_layout(incoming: dict, existing: dict) -> dict:
+    """合并布局：拓扑以传入为准，但对话/历史类字段在传入为空时保留已有值。
+
+    根因：编辑器自动保存（saveLayout → POST /api/projects）整体替换 layout，
+    若某次保存携带空 messages，会把项目里存储的对话历史静默抹掉。
+    此函数按组件 id 合并，仅保护"历史类"字段，位置/连线/API 设置等以传入为准。
+    """
+    if not isinstance(incoming, dict):
+        return existing if isinstance(existing, dict) else incoming
+    result = json.loads(json.dumps(incoming))  # 深拷贝，避免修改调用方数据
+    existing_comps = {}
+    if isinstance(existing, dict):
+        for c in existing.get("components", []):
+            if isinstance(c, dict) and "id" in c:
+                existing_comps[c["id"]] = c
+    merged_comps = []
+    for comp in result.get("components", []):
+        if isinstance(comp, dict) and comp.get("id") in existing_comps:
+            old = existing_comps[comp["id"]]
+            for field in _PROTECTED_LAYOUT_FIELDS:
+                if field in old and not comp.get(field):
+                    comp[field] = old[field]
+        merged_comps.append(comp)
+    result["components"] = merged_comps
+    return result
+
+
 @app.route("/api/projects", methods=["POST"])
 def api_create_or_update_project():
     """创建新项目或更新已有项目"""
@@ -361,7 +396,7 @@ def api_create_or_update_project():
         if not existing:
             return jsonify({"error": "项目不存在"}), 404
         existing["name"] = body.get("name", existing.get("name", "未命名"))
-        existing["layout"] = body.get("layout", existing.get("layout", {}))
+        existing["layout"] = _merge_layout(body.get("layout", {}), existing.get("layout", {}))
         existing["updatedAt"] = time.strftime("%Y-%m-%d %H:%M:%S")
         data = existing
     else:
