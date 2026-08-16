@@ -150,12 +150,19 @@ def load_project(path):
 
 
 def get_llm_config(components):
-    """从 LLM 组件读取 apiSettings（真实项目配置）"""
+    """从 LLM 组件读取 apiSettings（真实项目配置）；key 为空时回退环境变量 LLM_API_KEY"""
+    api_base = api_key = model = None
     for c in components:
         if c.get("type") == "llm" and c.get("apiSettings", {}).get("apiBase"):
             s = c["apiSettings"]
-            return s.get("apiBase"), s.get("apiKey"), s.get("model", "deepseek-chat")
-    return None, None, None
+            api_base = s.get("apiBase")
+            api_key = s.get("apiKey") or os.environ.get("LLM_API_KEY", "")
+            model = s.get("model", "deepseek-chat")
+            break
+    if not api_base:
+        api_base, api_key, model = "https://api.deepseek.com/v1", \
+            os.environ.get("LLM_API_KEY", ""), "deepseek-chat"
+    return api_base, api_key, model
 
 
 def collect_tools_from_ports(comp_id, port_prefix, count, comps, conns):
@@ -165,12 +172,17 @@ def collect_tools_from_ports(comp_id, port_prefix, count, comps, conns):
     for i in range(1, count + 1):
         port_id = f"{port_prefix}{i}"
         for cn in conns:
-            if cn["sourceCompId"] == comp_id and cn["sourcePort"] == port_id:
+            if cn["sourceCompId"] == comp_id and conn_port(cn, "sourcePort") == port_id:
                 tgt = comp_by_id.get(cn["targetCompId"])
                 if tgt:
                     names.extend(TOOL_NAME_MAP.get(tgt["type"], []))
                 break
     return list(dict.fromkeys(names))
+
+
+def conn_port(cn, key):
+    """兼容新旧连线字段名：sourcePort/sourcePortId、targetPort/targetPortId"""
+    return cn.get(key) or cn.get(key + "Id")
 
 
 def derive_component_info(comp, comps, conns):
@@ -183,6 +195,9 @@ def derive_component_info(comp, comps, conns):
         prefix = ORCH_PORT_PREFIX[ctype]
         count = comp.get("execPortCount", comp.get("agentPortCount", comp.get("seqPortCount", 5)))
         tools = collect_tools_from_ports(comp["id"], prefix, count, comps, conns)
+        if not tools:
+            # 无端口连接时退回自身编排工具（如 executor_run）
+            tools = TOOL_NAME_MAP.get(ctype, [])
         conn_desc = f"{ctype} 端口收集 {len(tools)} 个工具: {', '.join(tools[:6])}{'...' if len(tools) > 6 else ''}"
         return tools, conn_desc
 
@@ -204,7 +219,8 @@ def derive_component_info(comp, comps, conns):
         if cn["targetCompId"] == comp["id"]:
             src = comp_by_id.get(cn["sourceCompId"])
             if src:
-                conn_desc = f"{src['type']}[{cn['sourcePort']}] → {ctype}[{cn['targetPort']}]"
+                conn_desc = (f"{src['type']}[{conn_port(cn, 'sourcePort')}] → "
+                             f"{ctype}[{conn_port(cn, 'targetPort')}]")
             break
     return tools, conn_desc
 
