@@ -35,6 +35,9 @@ data/memories/
 data/storage_config.json
 baidu_debug.json
 
+# 用户项目数据（含个人对话内容，不推送到公开仓库）
+data/projects/*.json
+
 # 系统文件
 Thumbs.db
 Desktop.ini
