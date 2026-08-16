@@ -1,5 +1,20 @@
 # Agent Editor (wybzd)
 
+**Agent Editor** is a visual AI-agent builder and chat platform built with Python/Flask and vanilla JavaScript. Instead of writing glue code, you design AI workflows by dragging and connecting components — LLMs, tools, orchestrators, and skills — onto an interactive canvas, then talk to your agent through a real-time streaming chat interface.
+
+Key capabilities:
+
+- **Visual workflow editor** — wire together LLM, tool, orchestration (executor / plan / loop / agent), and skill components with drag-and-drop connections; save multiple project layouts with auto-save
+- **80+ built-in tools** — web search, office documents (Word / Excel / PPT / PDF), code execution, translation, weather, image processing, generic HTTP requests, file compression, Git, databases, and more
+- **Skill system** — built-in domain skills (document processing, frontend design, UI/UX, skill creation, PUA coaching, …) plus an intelligent mode where the LLM auto-selects the right skill via `use_skill`
+- **Streaming chat** — SSE token-by-token output, reasoning display, live tool-call monitoring, and abortable generation
+- **Memory system** — persistent conversation history, auto-summarization, and vector semantic search
+- **Security first** — API keys never persist in project files or git; workspace path confinement and zip-slip protection built in
+
+**Tech stack:** Python 3.14 · Flask 3.1 · vanilla JS (no build step) · SSE streaming · stdlib-only unit tests
+
+---
+
 基于 Flask + 原生 JS 的可视化 AI Agent 搭建与对话平台。通过拖拽连线的方式组合 LLM、工具与编排组件，生成可交互的 AI 工作流，并提供流式对话界面。
 
 ## ✨ 功能特性
