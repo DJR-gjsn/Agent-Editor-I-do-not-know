@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - 运行环境: Python 3.14.6, Flask 3.1.3（项目根 `D:\myxiangfa-MCPxuexi`）
-- 项目**无 git 仓库**：每项修改前用 `Copy-Item <file> <file>.bak` 备份，不执行 commit 步骤
+- **项目已初始化 git**（基线提交 `e9cdfe9`）：每个任务独立 commit，commit 步骤取代原 .bak 备份步骤（原备份步骤可跳过，git 即回滚保障）
 - 测试用 stdlib `unittest`（pytest 未安装且不引入新依赖）：`python -m unittest discover -s tests -v`（需在项目根运行）
 - 后端修改后必须重启服务器进程（kill 旧 job 再 `python server.py`）验证
 - 前端无 JS 测试设施：Task 3/4 以浏览器手动验收为准
