@@ -232,8 +232,14 @@ const ToolMonitor = {
 };
 
 // ============================================================
-// 对话记忆面板（工具调用下方，显示 Token 用量/上限）
+// 记忆面板（工具调用下方，显示 Token 用量/上限）
 // ============================================================
+/** token 数格式化：>=1000 显示为 K（一位小数），否则原样 */
+function formatTokens(n) {
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return String(n);
+}
+
 const MemoryPanel = {
     _countEl: null,
     _barEl: null,
@@ -301,7 +307,7 @@ const MemoryPanel = {
         if (pct >= 90) cls = 'danger';
         else if (pct >= 70) cls = 'warning';
 
-        this._countEl.textContent = `${tokens} / ~${Math.round(maxTokens / 1000)}K`;
+        this._countEl.textContent = `${formatTokens(tokens)} / ~${Math.round(maxTokens / 1000)}K`;
         this._countEl.className = 'mem-stat-value' + (cls ? ' ' + cls : '');
 
         this._barEl.style.width = pct + '%';
