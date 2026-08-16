@@ -20,3 +20,6 @@ report_summary.txt
 
 # 鏃ュ織
 *.log
+
+# 运行时数据（对话记忆）
+data/memories/
