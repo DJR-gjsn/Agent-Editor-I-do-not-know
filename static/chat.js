@@ -954,7 +954,8 @@ const FilesPanel = {
                 });
                 if (handle) {
                     const perm = await handle.queryPermission({ mode: 'readwrite' });
-                    if (perm === 'granted' || await handle.requestPermission({ mode: 'readwrite' }) === 'granted') {
+                    // 仅在权限已授予时自动恢复；prompt 状态需用户点击"选择存储目录"重新授权
+                    if (perm === 'granted') {
                         this._saveDirHandle = handle;
                         this._saveDirName = handle.name;
                         this._updateDirDisplay();
@@ -966,23 +967,21 @@ const FilesPanel = {
         }
 
         if (!this._saveDirHandle) {
-            showToast('⚠️ 请先选择存储目录', 'info');
-            await this.pickDir();
-            if (!this._saveDirHandle) return;
+            // showDirectoryPicker 同样需要用户激活，不能在 await 之后调用，
+            // 提示用户先点击"选择存储目录"按钮
+            showToast('⚠️ 请先点击"选择存储目录"按钮选择目录', 'info');
+            return;
         }
 
-        // 验证权限
+        // 验证权限（requestPermission 需用户激活，此处不自动请求）
         try {
             const perm = await this._saveDirHandle.queryPermission({ mode: 'readwrite' });
             if (perm !== 'granted') {
-                const req = await this._saveDirHandle.requestPermission({ mode: 'readwrite' });
-                if (req !== 'granted') {
-                    showToast('❌ 目录写入权限被拒绝', 'error');
-                    this._saveDirHandle = null;
-                    this._saveDirName = '';
-                    this._updateDirDisplay();
-                    return;
-                }
+                showToast('❌ 目录权限已失效，请重新点击"选择存储目录"授权', 'error');
+                this._saveDirHandle = null;
+                this._saveDirName = '';
+                this._updateDirDisplay();
+                return;
             }
         } catch (e) {
             showToast('❌ 存储目录已失效，请重新选择', 'error');

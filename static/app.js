@@ -6219,17 +6219,15 @@ async function restoreMCPDir() {
 
         if (!handle) return;
 
-        // 请求恢复权限
+        // 请求恢复权限：仅在权限已授予时自动恢复。
+        // 注意：requestPermission 需要用户激活（点击手势），不能在 await 之后调用，
+        // 否则浏览器抛 SecurityError。若权限处于 prompt 状态，跳过自动恢复，
+        // 用户可通过"选择目录"按钮（新的点击手势）重新授权。
         const opts = { mode: 'readwrite' };
         const perm = await handle.queryPermission(opts);
         if (perm !== 'granted') {
-            const requested = await handle.requestPermission(opts);
-            if (requested !== 'granted') {
-                // 权限被拒绝，清除旧记录
-                const delTx = db.transaction(MCP_STORE_NAME, 'readwrite');
-                delTx.objectStore(MCP_STORE_NAME).delete('save-dir');
-                return;
-            }
+            console.log('MCP 目录权限待确认（prompt），跳过自动恢复，用户可重新选择');
+            return;
         }
 
         STATE.mcpSaveDir = handle;
@@ -6297,18 +6295,15 @@ async function saveMCPFilesToDir(fileExt, label) {
         return;
     }
 
-    // 写入前重新确认权限
+    // 写入前重新确认权限（requestPermission 需用户激活，此处不自动请求）
     try {
         const perm = await STATE.mcpSaveDir.queryPermission({ mode: 'readwrite' });
         if (perm !== 'granted') {
-            const requested = await STATE.mcpSaveDir.requestPermission({ mode: 'readwrite' });
-            if (requested !== 'granted') {
-                showToast('目录写入权限被拒绝，请重新选择存储目录', 'error');
-                STATE.mcpSaveDir = null;
-                STATE.mcpSaveDirName = '';
-                renderAll();
-                return;
-            }
+            showToast('目录权限已失效，请重新点击"选择存储目录"授权', 'error');
+            STATE.mcpSaveDir = null;
+            STATE.mcpSaveDirName = '';
+            renderAll();
+            return;
         }
     } catch (e) {
         // 句柄失效，清除并提示重选
