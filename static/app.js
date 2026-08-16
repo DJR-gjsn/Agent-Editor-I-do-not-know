@@ -138,6 +138,9 @@ const TOOL_NAME_MAP = {
     mcp_navigation: ['nav_route', 'nav_search_place'],
     plan: ['plan_generate', 'plan_execute_step'],
     memory_summarizer: ['memory_summarize'],
+    mcp_zip: ['zip_create', 'zip_extract'],
+    http_request: ['http_request'],
+    image_tools: ['screenshot', 'image_info', 'image_convert', 'image_resize', 'image_compress'],
 };
 
 // 从指定端口收集工具名称
@@ -551,6 +554,25 @@ const COMPONENT_DEFS = {
         ports: { inputs: [{ id: 'jq-in', label: '查询结果 → LLM' }], outputs: [] },
         description: '对 JSON 数据执行路径查询（$.data.items[0].name）。适合解析 API 返回的 JSON。',
     },
+    // --- 通用工具（压缩/HTTP/图片） ---
+    mcp_zip: {
+        icon: '\u{1F4E6}', title: '压缩工具', color: '#fa8c16', defaultSize: 3,
+        render: renderSimpleToolPanel('zip_create', 'zip 压缩 / 解压'),
+        ports: { inputs: [{ id: 'zip-in', label: '结果 → LLM' }], outputs: [] },
+        description: '文件压缩打包与解压：zip_create 按文件/通配符打包，zip_extract 解压（内置 zip-slip 防护）。适合批量交付文件。',
+    },
+    http_request: {
+        icon: '\u{1F310}', title: 'HTTP 请求', color: '#13c2c2', defaultSize: 3,
+        render: renderSimpleToolPanel('http_request', '通用 HTTP 请求（GET/POST/JSON）'),
+        ports: { inputs: [{ id: 'http-in', label: '响应 → LLM' }], outputs: [] },
+        description: '发送通用 HTTP 请求：支持 GET/POST/PUT/PATCH/DELETE、JSON 请求体、自定义头、查询参数。对接任意第三方 API。',
+    },
+    image_tools: {
+        icon: '\u{1F5BC}', title: '图片工具', color: '#eb2f96', defaultSize: 3,
+        render: renderSimpleToolPanel('image_info', '截屏 / 图片信息 / 转换 / 缩放 / 压缩'),
+        ports: { inputs: [{ id: 'img-in', label: '结果 → LLM' }], outputs: [] },
+        description: '图片全套处理：screenshot 截屏、image_info 查看信息、image_convert 格式转换、image_resize 缩放、image_compress 压缩。',
+    },
     // --- MCP 服务 ---
     mcp_weather: {
         icon: '\u{1F324}', title: 'Weather 天气', color: '#1890ff', defaultSize: 4,
@@ -912,6 +934,9 @@ const COMPONENT_CATEGORIES = {
     // Tools
     web_search:         ['Tools', 'cat-tools'],
     url_fetch:          ['Tools', 'cat-tools'],
+    mcp_zip:            ['Tools', 'cat-tools'],
+    http_request:       ['Tools', 'cat-tools'],
+    image_tools:        ['Tools', 'cat-tools'],
     calculator:         ['Tools', 'cat-tools'],
     code_executor:      ['Tools', 'cat-tools'],
     text_tools:         ['Tools', 'cat-tools'],
@@ -1028,6 +1053,9 @@ function setupPalletTooltips() {
         url_fetch: '#096dd9',
         file_ops: '#d48806',
         json_query: '#722ed1',
+        mcp_zip: '#fa8c16',
+        http_request: '#13c2c2',
+        image_tools: '#eb2f96',
         mcp_word: '#2b5797',
         mcp_excel: '#217346',
         mcp_ppt: '#d24726',

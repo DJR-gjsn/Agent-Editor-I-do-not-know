@@ -23,6 +23,8 @@ def register_all(app):
     from . import mcp_clipboard, mcp_encoding, mcp_system
     from . import mcp_email, mcp_translate, mcp_calendar
     from . import mcp_pdf, mcp_finance, mcp_geocode, mcp_navigation, mcp_skills
+    # 通用工具集（压缩/HTTP/截图/图片）
+    from . import mcp_utility
     # 顺序执行 & 计划模块
     from . import sequential_executor, plan, executor, loop
     # 记忆持久化模块
@@ -64,6 +66,7 @@ def register_all(app):
     mcp_geocode.register_routes(app)
     mcp_navigation.register_routes(app)
     mcp_skills.register_routes(app)
+    mcp_utility.register_routes(app)
     sequential_executor.register_routes(app)
     plan.register_routes(app, http_session)
     executor.register_routes(app)

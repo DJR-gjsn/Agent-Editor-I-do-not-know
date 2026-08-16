@@ -1,0 +1,18 @@
+{
+  "project_id": "default",
+  "session_id": "auto_test_1786850445",
+  "title": "测试记忆",
+  "messages": [
+    {
+      "role": "user",
+      "content": "测试记忆"
+    },
+    {
+      "role": "assistant",
+      "content": "记忆已保存"
+    }
+  ],
+  "created_at": 1786850445.6655774,
+  "updated_at": 1786850445.6657689,
+  "message_count": 2
+}

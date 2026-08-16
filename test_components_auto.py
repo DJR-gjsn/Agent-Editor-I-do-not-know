@@ -62,6 +62,9 @@ TOOL_NAME_MAP = {
     "plan": ["plan_generate", "plan_execute_step"],
     "memory_summarizer": ["memory_summarize"],
     "executor": ["executor_run"],
+    "mcp_zip": ["zip_create", "zip_extract"],
+    "http_request": ["http_request"],
+    "image_tools": ["screenshot", "image_info", "image_convert", "image_resize", "image_compress"],
 }
 
 # 编排组件 → 端口前缀（executor 收集工具用）
@@ -103,6 +106,9 @@ TEST_PROMPTS = {
     "plan": "为'写一份测试报告'制定一个两步计划",
     "executor": "按顺序执行两步：第一步计算 123*456，第二步获取当前时间",
     "memory_summarizer": "总结这段对话：用户问排序算法，AI 解释了冒泡排序",
+    "mcp_zip": "把文件 test_auto.txt 压缩成 test_auto.zip",
+    "http_request": "用 GET 请求访问 https://httpbin.org/json 并返回响应",
+    "image_tools": "把 test_auto.png 图片转换成 JPEG 格式",
     "skill_document": "使用文档处理技能创建一个包含'你好'的 Word 文档",
     "skill_pua": "使用 PUA 绩效教练技能，帮我分析'测试没跑完就宣称完成'这个问题",
     "skills_manager": "使用可用的技能之一来完成：创建一个包含'技能测试'的 Word 文档",
