@@ -403,6 +403,10 @@ function hideEmpty() { chatEmpty.style.display = 'none'; }
 function showEmpty() { chatEmpty.style.display = ''; }
 function scrollToBottom() { chatMessages.scrollTop = chatMessages.scrollHeight; }
 
+function isNearBottom() {
+    return chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 80;
+}
+
 // ============================================================
 // 发送消息（使用共享 SSE 流解析）
 // ============================================================
@@ -487,19 +491,41 @@ async function sendMessage() {
         `;
         aiBubble.appendChild(thinkingWrapper);
 
-        await readSSEStream(response, {
-            onReasoning(delta) {
-                reasoningContent += delta;
+        // rAF 批量渲染状态：累积增量，每帧合并渲染一次
+        let pendingDelta = '';
+        let rafId = null;
+        const renderAI = () => {
+            rafId = null;
+            if (pendingDelta) {
+                fullContent += pendingDelta;
+                pendingDelta = '';
+                aiBubble.textContent = fullContent;
+                if (isNearBottom()) scrollToBottom();
+            }
+        };
+        let pendingReasoning = '';
+        let rafReasoningId = null;
+        const renderReasoning = () => {
+            rafReasoningId = null;
+            if (pendingReasoning) {
+                reasoningContent += pendingReasoning;
+                pendingReasoning = '';
                 thinkingWrapper.style.display = 'block';
                 const body = thinkingWrapper.querySelector('.thinking-body');
                 if (body) body.textContent = reasoningContent;
-                scrollToBottom();
+                if (isNearBottom()) scrollToBottom();
+            }
+        };
+
+        await readSSEStream(response, {
+            onReasoning(delta) {
+                pendingReasoning += delta;
+                if (rafReasoningId === null) rafReasoningId = requestAnimationFrame(renderReasoning);
             },
             onData(delta) {
-                fullContent += delta;
-                aiBubble.textContent = fullContent;
+                pendingDelta += delta;
                 aiBubble.classList.add('typing-cursor');
-                scrollToBottom();
+                if (rafId === null) rafId = requestAnimationFrame(renderAI);
             },
             onToolCall(tc) {
                 toolEvents.push({ type: 'tool_call', ...tc });
@@ -516,6 +542,10 @@ async function sendMessage() {
         });
 
         aiBubble.classList.remove('typing-cursor');
+
+        // 流结束：取消未触发的 rAF 并立即落盘剩余增量
+        if (rafId !== null) { cancelAnimationFrame(rafId); renderAI(); }
+        if (rafReasoningId !== null) { cancelAnimationFrame(rafReasoningId); renderReasoning(); }
 
         // 思考完成后，设置折叠交互
         if (reasoningContent) {
