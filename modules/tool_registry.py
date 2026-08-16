@@ -12,6 +12,37 @@ from .utils import set_request_api_config
 
 _executor = concurrent.futures.ThreadPoolExecutor(max_workers=8, thread_name_prefix="tool")
 
+# 活跃任务计数：卡死工具占满 worker 时，新调用可快速失败而非排队等完整超时
+_MAX_WORKERS = 8
+_active_lock = threading.Lock()
+_active_tasks = 0
+
+
+def _track_start():
+    global _active_tasks
+    with _active_lock:
+        _active_tasks += 1
+
+
+def _track_end():
+    global _active_tasks
+    with _active_lock:
+        _active_tasks -= 1
+
+
+def _pool_saturated() -> bool:
+    with _active_lock:
+        return _active_tasks >= _MAX_WORKERS
+
+
+def _tracked_run(fn, args, cfg):
+    """在池线程内运行工具并跟踪活跃计数（配合 finally 保证计数不泄漏）"""
+    _track_start()
+    try:
+        return _run_with_config(fn, args, cfg)
+    finally:
+        _track_end()
+
 _lock = threading.Lock()
 _tools = {}  # name -> {definition, executor}
 
@@ -71,7 +102,12 @@ def execute(name: str, args: dict, timeout: float = None, request_config: dict =
     try:
         if timeout is None:
             return str(_run_with_config(tool["executor"], args, request_config))
-        future = _executor.submit(_run_with_config, tool["executor"], args, request_config)
+        if _pool_saturated():
+            return (
+                f"工具执行超时（线程池繁忙：{_active_tasks} 个工具仍在运行），"
+                f"请稍后重试或简化请求"
+            )
+        future = _executor.submit(_tracked_run, tool["executor"], args, request_config)
         try:
             return str(future.result(timeout=timeout))
         except concurrent.futures.TimeoutError:

@@ -49,10 +49,10 @@ _ENV_MAP = {
 }
 
 # 需要转为 int 的键
-_INT_KEYS = {"max_tokens", "port", "tool_timeout"}
+_INT_KEYS = {"max_tokens", "port"}
 
 # 需要转为 float 的键
-_FLOAT_KEYS = {"temperature"}
+_FLOAT_KEYS = {"temperature", "tool_timeout"}
 
 
 def _get_runtime_config() -> dict:

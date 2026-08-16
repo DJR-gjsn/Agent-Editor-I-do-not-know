@@ -59,9 +59,10 @@ def _exec_use_skill(args: dict) -> str:
                 f"请从上述列表中选择一个确切的 skill_id 重新调用 use_skill，不要自己编造 ID。"
             )
 
-    # 检测重复激活：同一技能只返回完整 prompt 一次
-    count = _activated_skills.get(skill_id, 0)
-    _activated_skills[skill_id] = count + 1
+    # 检测重复激活：同一技能只返回完整 prompt 一次（加锁保证并发计数正确）
+    with _skills_cache_lock:
+        count = _activated_skills.get(skill_id, 0)
+        _activated_skills[skill_id] = count + 1
 
     if count >= 1:
         # 已激活过：不再返回完整 prompt，强制 LLM 使用已有指导
@@ -150,8 +151,8 @@ def register_chat_routes(app, http_session, cfg):
         smart_mode = data.get("smart_mode", False)
         if smart_mode:
             available_skills = data.get("available_skills", [])
-            _activated_skills.clear()
             with _skills_cache_lock:
+                _activated_skills.clear()
                 _smart_skills_cache.clear()
                 for sk in available_skills:
                     sid = sk.get("id", "")
@@ -206,7 +207,8 @@ def register_chat_routes(app, http_session, cfg):
             has_use_skill = any(t.get("function", {}).get("name") == "use_skill" for t in tools)
             if not has_use_skill:
                 # 动态构建 use_skill 定义，包含准确的 skill_id 枚举
-                skill_ids = list(_smart_skills_cache.keys()) if _smart_skills_cache else [s.get("id", "") for s in available_skills]
+                with _skills_cache_lock:
+                    skill_ids = list(_smart_skills_cache.keys()) if _smart_skills_cache else [s.get("id", "") for s in available_skills]
                 use_skill_dynamic = {
                     "name": "use_skill",
                     "description": (
