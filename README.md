@@ -1,4 +1,4 @@
-# Agent编辑器 (wybzd)
+# Agent Editor (wybzd)
 
 基于 Flask + 原生 JS 的可视化 AI Agent 搭建与对话平台。通过拖拽连线的方式组合 LLM、工具与编排组件，生成可交互的 AI 工作流，并提供流式对话界面。
 

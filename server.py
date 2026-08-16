@@ -1,5 +1,5 @@
 """
-Agent编辑器V0.1 - Flask 后端
+Agent Editor V0.1 - Flask 后端
 提供 Web 页面和 LLM API 代理（隐藏 API Key）
 """
 
@@ -127,7 +127,7 @@ def index():
 
 @app.route("/editor")
 def editor_page():
-    """Agent编辑器"""
+    """Agent Editor"""
     return render_template("index.html")
 
 
@@ -622,7 +622,7 @@ if __name__ == "__main__":
     is_debug = os.getenv("FLASK_ENV", "").lower() != "production"
 
     logger.info("=" * 50)
-    logger.info("  Agent编辑器 V0.1")
+    logger.info("  Agent Editor V0.1")
     logger.info("  LLM Model: %s", MODEL)
     logger.info("  URL: http://localhost:%d", PORT)
     logger.info("  Mode: %s", "debug" if is_debug else "production")
