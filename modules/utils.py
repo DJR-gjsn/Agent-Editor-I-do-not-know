@@ -16,10 +16,34 @@ import logging
 import re
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
 from flask import Response, stream_with_context
+
+# ============================================================
+# 请求级 LLM 配置（线程本地） — 工具执行线程内读取
+# ============================================================
+_tool_request_config = threading.local()
+
+
+def set_request_api_config(cfg: dict):
+    """在当前线程记录请求级 LLM 配置（工具执行线程内使用）"""
+    _tool_request_config.cfg = cfg or {}
+
+
+def get_request_api_config() -> dict:
+    """获取请求级 LLM 配置：优先线程本地（工具执行线程），回退 Flask g（请求线程直连）"""
+    cfg = getattr(_tool_request_config, 'cfg', None)
+    if cfg:
+        return cfg
+    try:
+        from flask import g as _g
+        return getattr(_g, '_api_config', {}) or {}
+    except Exception:
+        return {}
+
 
 # ============================================================
 # 工作区工具（消除 common_tools.py 和 file_search_tools.py 中的重复）
@@ -183,12 +207,20 @@ def get_logger(name: str = "wybzd") -> logging.Logger:
     return logging.getLogger(name)
 
 
+def _safe_close(gen):
+    """安全关闭生成器（忽略关闭过程中的任何异常）"""
+    try:
+        gen.close()
+    except Exception:
+        pass
+
+
 def with_heartbeat(events, idle_seconds: float = 15.0):
     """
     包装事件生成器：事件流空闲超过 idle_seconds 时产出 ("heartbeat", None)，
     其余情况原样产出 ("event", event)。用于 SSE 长连接保活。
     内部用 daemon 泵线程 + 队列实现空闲检测；生成器被关闭（GeneratorExit）
-    时会通知泵线程退出，避免线程泄漏。
+    时会通知泵线程退出并关闭底层生成器，避免线程泄漏与连接悬挂。
     """
     import queue
     import threading
@@ -206,6 +238,7 @@ def with_heartbeat(events, idle_seconds: float = 15.0):
                     except queue.Full:
                         continue
                 else:
+                    _safe_close(events)
                     return
             q.put(("done", None))
         except Exception as exc:
@@ -230,4 +263,5 @@ def with_heartbeat(events, idle_seconds: float = 15.0):
             yield (kind, payload)
     except GeneratorExit:
         stop.set()
+        _safe_close(events)
         raise

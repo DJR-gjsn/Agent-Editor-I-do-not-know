@@ -14,7 +14,7 @@ import uuid
 from collections import defaultdict
 from pathlib import Path
 
-from flask import Flask, Response, g, jsonify, render_template, request, stream_with_context, send_from_directory
+from flask import Flask, jsonify, render_template, request, send_from_directory
 from flask_compress import Compress
 
 import requests

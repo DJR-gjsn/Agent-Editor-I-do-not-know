@@ -262,63 +262,66 @@ def register_chat_routes(app, http_session, cfg):
 
             from modules.utils import with_heartbeat
             hb_events = with_heartbeat(events, idle_seconds=15)
-            for hb_kind, hb_payload in hb_events:
-                if hb_kind == "heartbeat":
-                    yield ": keep-alive\n\n"
-                    continue
-                event = hb_payload
-                etype = event["type"]
+            try:
+                for hb_kind, hb_payload in hb_events:
+                    if hb_kind == "heartbeat":
+                        yield ": keep-alive\n\n"
+                        continue
+                    event = hb_payload
+                    etype = event["type"]
 
-                if etype == "reasoning":
-                    # 思考过程（DeepSeek Reasoner 等推理模型）
-                    yield f"data: {json.dumps({'choices': [{'delta': {'reasoning_content': event['content']}}]})}\n\n"
+                    if etype == "reasoning":
+                        # 思考过程（DeepSeek Reasoner 等推理模型）
+                        yield f"data: {json.dumps({'choices': [{'delta': {'reasoning_content': event['content']}}]})}\n\n"
 
-                elif etype == "content":
-                    yield f"data: {json.dumps({'choices': [{'delta': {'content': event['content']}}]})}\n\n"
+                    elif etype == "content":
+                        yield f"data: {json.dumps({'choices': [{'delta': {'content': event['content']}}]})}\n\n"
 
-                elif etype == "tool_call":
-                    # 流式模式单个 tool_call
-                    if "name" in event:
-                        logger.info("LLM tool call: %s(%s)", event["name"], event.get("arguments", "")[:100])
-                        yield f"data: {json.dumps({'tool_calls': [{'id': event.get('id', ''), 'name': event['name'], 'arguments': event.get('arguments', '')}]})}\n\n"
-                    # 非流式模式批量 tool_calls
-                    elif "calls" in event:
-                        for tc in event["calls"]:
-                            logger.info("LLM tool call: %s(%s)", tc["name"], tc.get("arguments", "")[:100])
-                        yield f"data: {json.dumps({'tool_calls': [{'id': tc.get('id', ''), 'name': tc['name'], 'arguments': tc['arguments']} for tc in event['calls']]})}\n\n"
+                    elif etype == "tool_call":
+                        # 流式模式单个 tool_call
+                        if "name" in event:
+                            logger.info("LLM tool call: %s(%s)", event["name"], event.get("arguments", "")[:100])
+                            yield f"data: {json.dumps({'tool_calls': [{'id': event.get('id', ''), 'name': event['name'], 'arguments': event.get('arguments', '')}]})}\n\n"
+                        # 非流式模式批量 tool_calls
+                        elif "calls" in event:
+                            for tc in event["calls"]:
+                                logger.info("LLM tool call: %s(%s)", tc["name"], tc.get("arguments", "")[:100])
+                            yield f"data: {json.dumps({'tool_calls': [{'id': tc.get('id', ''), 'name': tc['name'], 'arguments': tc['arguments']} for tc in event['calls']]})}\n\n"
 
-                elif etype == "tool_result":
-                    result = event["result"]
-                    # ── 搜索刹车（硬限制） ──
-                    if event["name"] == "web_search":
-                        search_count += 1
-                        if search_count > SEARCH_HARD_LIMIT:
-                            # 硬刹车：告知用户 + 拒绝 LLM
-                            yield f"data: {json.dumps({'choices': [{'delta': {'content': f'\\n\\n⛔ 搜索次数已达上限（{SEARCH_HARD_LIMIT}次），不再执行新的搜索。请基于已有信息回复。\\n\\n'}}]})}\n\n"
-                            result = (
-                                f"⛔ 搜索已被系统强制拒绝（第{search_count}次搜索，上限{SEARCH_HARD_LIMIT}次）。\n"
-                                f"你已经进行了 {search_count} 次搜索，已达上限。\n"
-                                f"请立即停止调用 web_search，直接基于已有的搜索结果生成最终回复。\n"
-                                f"不要再尝试任何搜索，否则对话将被强制终止。"
-                            )
-                        elif office_tools_present and search_count >= SEARCH_SOFT_BRAKE:
-                            # 软刹车：提醒即将达到上限（不强制推 Office 工具）
-                            result = result + (
-                                f"\n\n⚠️ 提醒（第{search_count}次搜索，上限{SEARCH_HARD_LIMIT}次）：\n"
-                                f"搜索次数即将达到上限！请基于已有信息继续工作，\n"
-                                f"必要时可使用可用工具生成最终交付物。"
-                            )
-                    logger.info("tool result: %s -> %s", event["name"], result[:100])
-                    yield f"data: {json.dumps({'tool_result': {'name': event['name'], 'result': result[:8000]}})}\n\n"
+                    elif etype == "tool_result":
+                        result = event["result"]
+                        # ── 搜索刹车（硬限制） ──
+                        if event["name"] == "web_search":
+                            search_count += 1
+                            if search_count > SEARCH_HARD_LIMIT:
+                                # 硬刹车：告知用户 + 拒绝 LLM
+                                yield f"data: {json.dumps({'choices': [{'delta': {'content': f'\\n\\n⛔ 搜索次数已达上限（{SEARCH_HARD_LIMIT}次），不再执行新的搜索。请基于已有信息回复。\\n\\n'}}]})}\n\n"
+                                result = (
+                                    f"⛔ 搜索已被系统强制拒绝（第{search_count}次搜索，上限{SEARCH_HARD_LIMIT}次）。\n"
+                                    f"你已经进行了 {search_count} 次搜索，已达上限。\n"
+                                    f"请立即停止调用 web_search，直接基于已有的搜索结果生成最终回复。\n"
+                                    f"不要再尝试任何搜索，否则对话将被强制终止。"
+                                )
+                            elif office_tools_present and search_count >= SEARCH_SOFT_BRAKE:
+                                # 软刹车：提醒即将达到上限（不强制推 Office 工具）
+                                result = result + (
+                                    f"\n\n⚠️ 提醒（第{search_count}次搜索，上限{SEARCH_HARD_LIMIT}次）：\n"
+                                    f"搜索次数即将达到上限！请基于已有信息继续工作，\n"
+                                    f"必要时可使用可用工具生成最终交付物。"
+                                )
+                        logger.info("tool result: %s -> %s", event["name"], result[:100])
+                        yield f"data: {json.dumps({'tool_result': {'name': event['name'], 'result': result[:8000]}})}\n\n"
 
-                elif etype == "error":
-                    logger.error("chat error: %s", event["error"])
-                    yield sse_error(event["error"])
-                    return
+                    elif etype == "error":
+                        logger.error("chat error: %s", event["error"])
+                        yield sse_error(event["error"])
+                        return
 
-                elif etype == "done":
-                    yield sse_done()
-                    return
+                    elif etype == "done":
+                        yield sse_done()
+                        return
+            finally:
+                hb_events.close()
 
         return make_sse_response(generate())
 

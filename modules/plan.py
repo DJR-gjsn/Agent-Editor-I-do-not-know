@@ -13,7 +13,7 @@ from flask import jsonify, request
 from . import tool_registry
 from .config import get_config
 from .llm_client import chat_with_tools_sync
-from .utils import clean_json_response, make_sse_response, sse_event, sse_done
+from .utils import clean_json_response, get_request_api_config, make_sse_response, sse_event, sse_done
 
 # ============================================================
 # 共享 HTTP session
@@ -110,12 +110,8 @@ def _generate_plan(task: str, max_steps: int = 7,
                    api_base: str = None, api_key: str = None, model: str = None) -> dict:
     """调用 LLM 生成执行计划"""
     cfg = get_config()
-    # 优先使用传入参数，其次使用 Flask g 中的请求级配置，最后使用全局默认值
-    try:
-        from flask import g as _g
-        req_cfg = getattr(_g, '_api_config', {}) or {}
-    except Exception:
-        req_cfg = {}
+    # 优先使用传入参数，其次使用请求级配置（线程本地 + Flask g 回退），最后使用全局默认值
+    req_cfg = get_request_api_config()
     base = api_base or req_cfg.get("api_base") or cfg["api_base"]
     key = api_key or req_cfg.get("api_key") or cfg["api_key"]
     mdl = model or req_cfg.get("model") or cfg["model"]
@@ -180,11 +176,7 @@ def _execute_step(step_title: str, step_description: str, tools: list = None,
                   api_base: str = None, api_key: str = None, model: str = None) -> dict:
     """执行单个计划步骤"""
     cfg = get_config()
-    try:
-        from flask import g as _g
-        req_cfg = getattr(_g, '_api_config', {}) or {}
-    except Exception:
-        req_cfg = {}
+    req_cfg = get_request_api_config()
     base = api_base or req_cfg.get("api_base") or cfg["api_base"]
     key = api_key or req_cfg.get("api_key") or cfg["api_key"]
     mdl = model or req_cfg.get("model") or cfg["model"]

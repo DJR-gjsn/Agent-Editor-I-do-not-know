@@ -13,6 +13,7 @@ from flask import jsonify, request
 
 from . import tool_registry
 from .config import get_config
+from .utils import get_request_api_config
 
 # ============================================================
 # 向量存储（线程安全）
@@ -47,11 +48,7 @@ def _get_stats() -> dict:
 def _get_embedding(text: str, api_base: str = None, api_key: str = None) -> list:
     """获取文本向量。优先用 API embeddings，不可用时回退到本地 TF-IDF"""
     cfg = get_config()
-    try:
-        from flask import g as _g
-        req_cfg = getattr(_g, '_api_config', {}) or {}
-    except Exception:
-        req_cfg = {}
+    req_cfg = get_request_api_config()
     base = api_base or req_cfg.get("api_base") or cfg["api_base"]
     key = api_key or req_cfg.get("api_key") or cfg["api_key"]
 

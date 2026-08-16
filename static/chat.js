@@ -549,6 +549,7 @@ async function sendMessage() {
             },
             onAbort() {
                 fullContent = fullContent || '（已停止）';
+                aiBubble.textContent = fullContent;
             },
         });
 

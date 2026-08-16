@@ -74,6 +74,9 @@ def chat_with_tools(
     mdl = model or cfg["model"]
     mt = max_tokens if max_tokens is not None else cfg["max_tokens"]
     temp = temperature if temperature is not None else cfg["temperature"]
+    # 请求级 LLM 配置：工具执行在线程池工作线程中运行，无法读取 Flask g，
+    # 因此显式传给 tool_registry.execute 以注入线程本地配置
+    request_config = {"api_base": base, "api_key": key, "model": mdl}
 
     session = http_session or _default_session()
     # headers 在循环外构建一次，避免每轮 tool-call 重复创建
@@ -198,7 +201,7 @@ def chat_with_tools(
                             except json.JSONDecodeError:
                                 tool_args = {}
                             try:
-                                result = tool_registry.execute(tc["name"], tool_args, timeout=cfg["tool_timeout"])
+                                result = tool_registry.execute(tc["name"], tool_args, timeout=cfg["tool_timeout"], request_config=request_config)
                             except Exception as exc:
                                 result = f"工具执行异常: {exc}"
                             yield {
@@ -252,7 +255,7 @@ def chat_with_tools(
                             tool_args = {}
 
                         try:
-                            result = tool_registry.execute(tool_name, tool_args, timeout=cfg["tool_timeout"])
+                            result = tool_registry.execute(tool_name, tool_args, timeout=cfg["tool_timeout"], request_config=request_config)
                         except Exception as exc:
                             result = f"工具执行异常: {exc}"
                         yield {

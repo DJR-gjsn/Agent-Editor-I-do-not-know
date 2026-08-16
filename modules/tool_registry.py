@@ -8,6 +8,8 @@ import threading
 
 import concurrent.futures
 
+from .utils import set_request_api_config
+
 _executor = concurrent.futures.ThreadPoolExecutor(max_workers=8, thread_name_prefix="tool")
 
 _lock = threading.Lock()
@@ -51,7 +53,16 @@ def get_definitions_by_names(names: list) -> list:
         ]
 
 
-def execute(name: str, args: dict, timeout: float = None) -> str:
+def _run_with_config(fn, args, cfg):
+    """在工具执行线程内设置请求级配置，执行完毕后清理，避免跨请求泄漏"""
+    set_request_api_config(cfg)
+    try:
+        return fn(args)
+    finally:
+        set_request_api_config({})
+
+
+def execute(name: str, args: dict, timeout: float = None, request_config: dict = None) -> str:
     """执行指定工具，返回结果字符串。timeout 不为 None 时限制执行时长，超时返回提示。"""
     with _lock:
         tool = _tools.get(name)
@@ -59,8 +70,8 @@ def execute(name: str, args: dict, timeout: float = None) -> str:
         return f"错误: 未知工具 '{name}'"
     try:
         if timeout is None:
-            return str(tool["executor"](args))
-        future = _executor.submit(tool["executor"], args)
+            return str(_run_with_config(tool["executor"], args, request_config))
+        future = _executor.submit(_run_with_config, tool["executor"], args, request_config)
         try:
             return str(future.result(timeout=timeout))
         except concurrent.futures.TimeoutError:
