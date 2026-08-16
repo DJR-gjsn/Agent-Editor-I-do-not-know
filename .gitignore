@@ -1,16 +1,28 @@
-# Python
+# ── Python ─────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.egg-info/
 build/
 dist/
 
-# 测试报告产物
+# 虚拟环境与 IDE
+.venv/
+venv/
+env/
+.idea/
+.vscode/
+
+# 测试与构建产物
 *.xlsx
+*.log
 report_summary.txt
 *_results.json
 *_final.json
 *_detailed.json
+/test_project_connections.json
+
+# 本地工具配置（可能含个人权限/密钥）
+.claude/
 
 # 备份文件
 *.bak
@@ -18,8 +30,11 @@ report_summary.txt
 # SDD 工作区（任务简报/报告/审查包/进度账本）
 .superpowers/
 
-# 日志
-*.log
-
-# ����ʱ���ݣ��Ի����䣩
+# 运行时数据（对话记忆、存储配置、调试文件）
 data/memories/
+data/storage_config.json
+baidu_debug.json
+
+# 系统文件
+Thumbs.db
+Desktop.ini

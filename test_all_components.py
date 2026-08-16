@@ -5,7 +5,7 @@ import json, time, requests, sys, io, os
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
 API = "http://localhost:5000/api/chat"
-API_KEY = ""
+API_KEY = os.environ.get("LLM_API_KEY", "")
 API_BASE = "https://api.deepseek.com/v1"
 MODEL = "deepseek-chat"
 

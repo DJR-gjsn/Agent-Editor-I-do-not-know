@@ -64,9 +64,9 @@ print("\n\n" + "=" * 50)
 print("Testing via /api/chat endpoint")
 print("=" * 50)
 
-import json, requests
+import json, requests, os
 API = "http://localhost:5000/api/chat"
-API_KEY = ""
+API_KEY = os.environ.get("LLM_API_KEY", "")
 API_BASE = "https://api.deepseek.com/v1"
 MODEL = "deepseek-chat"
 
