@@ -63,7 +63,7 @@ function escapeHtml(str) {
 //       onToolResult({name, result}) 工具结果, onError(msg) 错误
 // ============================================================
 async function readSSEStream(response, callbacks) {
-    const { onData, onReasoning, onToolCall, onToolResult, onError } = callbacks || {};
+    const { onData, onReasoning, onToolCall, onToolResult, onError, onAbort } = callbacks || {};
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -120,6 +120,10 @@ async function readSSEStream(response, callbacks) {
             }
         }
     } catch (e) {
+        if (e.name === 'AbortError') {
+            if (onAbort) onAbort();
+            return { done: true, aborted: true };
+        }
         if (onError) onError(e.message);
         return { done: true, error: e.message };
     }

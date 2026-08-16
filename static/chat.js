@@ -31,6 +31,8 @@ const chatEmpty = document.getElementById('chat-empty');
 const chatInput = document.getElementById('chat-input');
 const btnSend = document.getElementById('btn-send');
 const btnClear = document.getElementById('btn-clear-chat');
+const btnStop = document.getElementById('btn-stop');
+let abortController = null;   // 当前请求的取消控制器
 const modelBadge = document.getElementById('chat-model');
 
 // ============================================================
@@ -438,6 +440,11 @@ async function sendMessage() {
 
     setInputDisabled(true);
 
+    abortController = new AbortController();
+    btnSend.style.display = 'none';
+    btnStop.style.display = '';
+    btnStop.onclick = () => { if (abortController) abortController.abort(); };
+
     let fullContent = '';
 
     try {
@@ -472,6 +479,7 @@ async function sendMessage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
+            signal: abortController.signal,
         });
 
         // 收集 tool 事件用于消息记录
@@ -539,6 +547,9 @@ async function sendMessage() {
                 fullContent = '❌ ' + error;
                 aiBubble.textContent = fullContent;
             },
+            onAbort() {
+                fullContent = fullContent || '（已停止）';
+            },
         });
 
         aiBubble.classList.remove('typing-cursor');
@@ -574,8 +585,17 @@ async function sendMessage() {
         });
 
     } catch (e) {
-        aiBubble.textContent = '❌ 请求失败: ' + e.message;
-        aiBubble.classList.remove('typing-cursor');
+        if (e.name === 'AbortError') {
+            aiBubble.textContent = fullContent || '（已停止）';
+            aiBubble.classList.remove('typing-cursor');
+        } else {
+            aiBubble.textContent = '❌ 请求失败: ' + e.message;
+            aiBubble.classList.remove('typing-cursor');
+        }
+    } finally {
+        abortController = null;
+        btnStop.style.display = 'none';
+        btnSend.style.display = '';
     }
 
     setInputDisabled(false);
