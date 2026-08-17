@@ -36,11 +36,21 @@ let abortController = null;   // 当前请求的取消控制器
 const modelBadge = document.getElementById('chat-model');
 
 // ============================================================
-// 主题
+// 主题 & 显示设置（与编辑器设置面板共享 localStorage）
 // ============================================================
 (function restoreTheme() {
     const saved = safeStorage.get('wybzd-theme') || 'industrial';
     document.documentElement.setAttribute('data-theme', saved);
+})();
+
+(function restoreDisplaySettings() {
+    // 字体大小（zoom）与行距（--ui-lh）
+    const FONT_SIZE_MAP = { small: 0.9, medium: 1.0, large: 1.1 };
+    const LINE_HEIGHT_MAP = { compact: 1.4, normal: 1.6, relaxed: 1.9 };
+    const fs = safeStorage.get('wybzd-font-size') || 'medium';
+    document.documentElement.style.zoom = FONT_SIZE_MAP[fs] || 1.0;
+    const lh = safeStorage.get('wybzd-line-height') || 'normal';
+    document.documentElement.style.setProperty('--ui-lh', String(LINE_HEIGHT_MAP[lh] || 1.6));
 })();
 
 // ============================================================

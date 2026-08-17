@@ -707,9 +707,14 @@ async function preloadSkillPrompts() {
 }
 
 // ============================================================
-// 主题切换
+// 主题切换 & 显示设置
 // ============================================================
 const THEME_KEY = 'wybzd-theme';
+const FONT_SIZE_KEY = 'wybzd-font-size';
+const LINE_HEIGHT_KEY = 'wybzd-line-height';
+
+const FONT_SIZE_MAP = { small: 0.9, medium: 1.0, large: 1.1 };
+const LINE_HEIGHT_MAP = { compact: 1.4, normal: 1.6, relaxed: 1.9 };
 
 function restoreTheme() {
     const saved = safeStorage.get(THEME_KEY) || 'industrial';
@@ -720,8 +725,34 @@ function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     safeStorage.set(THEME_KEY, theme);
     // 更新设置面板中的选中状态
-    document.querySelectorAll('.theme-option').forEach(opt => {
+    document.querySelectorAll('.theme-option[data-theme]').forEach(opt => {
         opt.classList.toggle('active', opt.dataset.theme === theme);
+    });
+}
+
+/** 恢复显示设置（字体大小/行距），编辑器与对话页共用 localStorage */
+function restoreDisplaySettings() {
+    const fs = safeStorage.get(FONT_SIZE_KEY) || 'medium';
+    applyFontSize(fs);
+    const lh = safeStorage.get(LINE_HEIGHT_KEY) || 'normal';
+    applyLineHeight(lh);
+}
+
+function applyFontSize(size) {
+    const scale = FONT_SIZE_MAP[size] || 1.0;
+    document.documentElement.style.zoom = scale;
+    safeStorage.set(FONT_SIZE_KEY, size);
+    document.querySelectorAll('.theme-option[data-fontsize]').forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.fontsize === size);
+    });
+}
+
+function applyLineHeight(lh) {
+    const val = LINE_HEIGHT_MAP[lh] || 1.6;
+    document.documentElement.style.setProperty('--ui-lh', String(val));
+    safeStorage.set(LINE_HEIGHT_KEY, lh);
+    document.querySelectorAll('.theme-option[data-lineheight]').forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.lineheight === lh);
     });
 }
 
@@ -730,15 +761,19 @@ function setupSettingsPanel() {
     const overlay = document.getElementById('settings-overlay');
     const btnClose = document.getElementById('settings-close');
     const themeOptions = document.getElementById('theme-options');
+    const fontSizeOptions = document.getElementById('fontsize-options');
+    const lineHeightOptions = document.getElementById('lineheight-options');
 
     if (!btnSettings || !overlay) return;
 
     // 打开设置
     btnSettings.addEventListener('click', () => {
         overlay.style.display = 'flex';
-        // 同步当前主题选中状态
+        // 同步当前选中状态
         const current = document.documentElement.getAttribute('data-theme') || 'industrial';
         applyTheme(current);
+        applyFontSize(safeStorage.get(FONT_SIZE_KEY) || 'medium');
+        applyLineHeight(safeStorage.get(LINE_HEIGHT_KEY) || 'normal');
     });
 
     // 关闭设置
@@ -758,6 +793,24 @@ function setupSettingsPanel() {
             showToast(`Theme: ${names[btn.dataset.theme] || btn.dataset.theme}`, 'success');
         });
     });
+
+    // 字体大小
+    fontSizeOptions.querySelectorAll('.theme-option').forEach(btn => {
+        btn.addEventListener('click', () => {
+            applyFontSize(btn.dataset.fontsize);
+            const names = { small: 'Small', medium: 'Medium', large: 'Large' };
+            showToast(`Font Size: ${names[btn.dataset.fontsize]}`, 'success');
+        });
+    });
+
+    // 行距
+    lineHeightOptions.querySelectorAll('.theme-option').forEach(btn => {
+        btn.addEventListener('click', () => {
+            applyLineHeight(btn.dataset.lineheight);
+            const names = { compact: 'Compact', normal: 'Normal', relaxed: 'Relaxed' };
+            showToast(`Line Height: ${names[btn.dataset.lineheight]}`, 'success');
+        });
+    });
 }
 
 // ============================================================
@@ -766,6 +819,8 @@ function setupSettingsPanel() {
 async function init() {
     // 恢复主题
     restoreTheme();
+    // 恢复显示设置（字体大小/行距）
+    restoreDisplaySettings();
     await loadConfig();
     preloadSkillPrompts();
     restoreMCPDir();

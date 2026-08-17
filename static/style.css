@@ -3181,6 +3181,14 @@ select { background: var(--bg-input); color: var(--text-primary); border-color: 
     height: auto;
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
+
+/* ============================================================
+   显示设置：行距（--ui-lh 由设置面板控制，默认 1.6 与原有一致）
+   ============================================================ */
+.module-panel, .module-field, .pallet-desc, .settings-label,
+.settings-group, .llm-panel-text, .chat-bubble {
+    line-height: var(--ui-lh, 1.6);
+}
 }
 
 /* --- 画布网格（玻璃态） --- */
