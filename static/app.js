@@ -7906,9 +7906,9 @@ function renderKnowledgeBasePanel(container, comp) {
             <input class="module-input" id="kbname-${comp.id}" value="${escapeHtml(comp.name || '知识库')}" style="font-size:11px;">
         </div>
         <div class="module-field">
-            <label>📄 导入文本文件（.txt / .md / .csv / .json）</label>
+            <label>📄 导入文件（.txt / .md / .csv / .json / .pdf / .docx / .xlsx）</label>
             <button class="module-btn" id="kbfile-${comp.id}" style="font-size:11px;width:100%;">📂 从电脑选择文件</button>
-            <input type="file" id="kbfileinput-${comp.id}" accept=".txt,.md,.csv,.json,text/plain" style="display:none;">
+            <input type="file" id="kbfileinput-${comp.id}" accept=".txt,.md,.csv,.json,.pdf,.docx,.xlsx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none;">
         </div>
         <div class="module-field">
             <label>⌨️ 或直接粘贴文本</label>
@@ -7953,16 +7953,15 @@ function renderKnowledgeBasePanel(container, comp) {
         }
     });
 
-    // 从电脑导入文件
+    // 从电脑导入文件（multipart 上传，后端按格式解析）
     const fileBtn = container.querySelector(`#kbfile-${comp.id}`);
     const fileInput = container.querySelector(`#kbfileinput-${comp.id}`);
     fileBtn.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', () => {
         const f = fileInput.files[0];
         if (!f) return;
-        const reader = new FileReader();
-        reader.onload = () => _kbImport(comp, String(reader.result || ''), container, `📄 ${f.name}`);
-        reader.readAsText(f);
+        _kbImportFile(comp, f, container);
+        fileInput.value = '';
     });
 
     // 粘贴文本导入
@@ -8006,6 +8005,37 @@ function _kbImport(comp, text, container, title) {
                     comp.vectorDocs = dd.documents || [];
                     if (title && dd.documents && dd.documents.length > 0) {
                         comp.vectorDocs[comp.vectorDocs.length - 1].title = title;
+                    }
+                }
+                renderAll();
+            });
+    })
+    .catch(e => { msgEl.textContent = '❌ ' + e.message; });
+}
+
+/** 上传文件到后端解析并导入知识库（支持 pdf/docx/xlsx/txt/md/csv/json） */
+function _kbImportFile(comp, file, container) {
+    const msgEl = container.querySelector(`#kbmsg-${comp.id}`);
+    if (!msgEl) return;
+    msgEl.style.display = 'block';
+    msgEl.textContent = `⏳ 正在解析并导入 ${file.name} …`;
+    const fd = new FormData();
+    fd.append('file', file);
+    fetch('/api/vector-memory/import-file', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(d => {
+        if (!d.success) {
+            msgEl.textContent = '❌ ' + (d.error || '导入失败');
+            return;
+        }
+        msgEl.textContent = '✅ ' + (d.result || '导入成功') + `（${d.chars || 0} 字符）`;
+        return fetch('/api/vector-memory/documents')
+            .then(r => r.json())
+            .then(dd => {
+                if (dd.success) {
+                    comp.vectorDocs = dd.documents || [];
+                    if (dd.documents && dd.documents.length > 0) {
+                        comp.vectorDocs[comp.vectorDocs.length - 1].title = '📄 ' + file.name;
                     }
                 }
                 renderAll();

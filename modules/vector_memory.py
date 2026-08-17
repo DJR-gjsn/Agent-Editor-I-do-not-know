@@ -281,16 +281,13 @@ def register_routes(app, http_session=None):
             if not text:
                 return jsonify({"success": False, "error": "text 不能为空"})
             # 支持传入 API 配置覆盖
-            # 支持传入 API 配置覆盖
             if data.get("api_base"):
                 _api_base_override = data["api_base"]
             if data.get("api_key"):
                 _api_key_override = data["api_key"]
             result = _exec_index({"text": text})
             return jsonify({"success": True, "result": result})
-        # GET
-    def vm_list_docs():
-        """列出向量库中的所有文档（不含向量数据）"""
+        # GET：列出向量库中的所有文档（不含向量数据）
         with _lock:
             docs = [{
                 "id": d["id"],
@@ -305,6 +302,58 @@ def register_routes(app, http_session=None):
         """清空向量库"""
         _clear_store()
         return jsonify({"success": True, "message": "向量库已清空"})
+
+    @app.route("/api/vector-memory/import-file", methods=["POST"])
+    def vm_import_file():
+        """从上传文件提取文本并导入向量知识库（支持 txt/md/csv/json/pdf/docx/xlsx）"""
+        f = request.files.get("file")
+        if not f or not f.filename:
+            return jsonify({"success": False, "error": "未收到文件"})
+        name = f.filename or ""
+        ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+        raw = f.read()
+
+        import io
+
+        text = ""
+        try:
+            if ext in ("txt", "md", "csv", "json"):
+                text = raw.decode("utf-8", errors="replace")
+            elif ext == "pdf":
+                from pypdf import PdfReader
+                reader = PdfReader(io.BytesIO(raw))
+                text = "\n".join((p.extract_text() or "") for p in reader.pages)
+            elif ext == "docx":
+                from docx import Document
+                doc = Document(io.BytesIO(raw))
+                text = "\n".join(p.text for p in doc.paragraphs)
+                for tbl in doc.tables:
+                    for row in tbl.rows:
+                        text += "\n" + "\t".join(c.text for c in row.cells)
+            elif ext == "xlsx":
+                from openpyxl import load_workbook
+                wb = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+                parts = []
+                for ws in wb.worksheets:
+                    for row in ws.iter_rows(values_only=True):
+                        vals = [str(c) for c in row if c is not None]
+                        if vals:
+                            parts.append("\t".join(vals))
+                text = "\n".join(parts)
+            elif ext == "doc":
+                return jsonify({"success": False, "error": "暂不支持旧版 .doc，请另存为 .docx 或 .txt"})
+            else:
+                text = raw.decode("utf-8", errors="replace")
+        except Exception as e:
+            return jsonify({"success": False, "error": f"解析 .{ext} 失败: {e}"})
+
+        text = (text or "").strip()
+        if not text:
+            return jsonify({"success": False, "error": "未能从文件中提取到文本内容"})
+
+        result = _exec_index({"text": text[:20000]})
+        return jsonify({"success": True, "result": result, "chars": len(text),
+                        "filename": name, "ext": ext})
 
     @app.route("/api/vector-memory/search", methods=["POST"])
     def vm_search():
