@@ -171,6 +171,7 @@ function collectToolsFromPorts(compId, portIds) {
 function serializeComponent(c) {
     return {
         id: c.id, type: c.type, size: c.size, x: c.x, y: c.y,
+        name: c.name || null,
         messages: c.messages,
         // apiKey 不写入布局（安全：避免密钥进入 git 仓库/服务器存储）；
         // 密钥仅保留在组件内存与浏览器 localStorage 的 active-llm-config 中
@@ -206,6 +207,7 @@ function deserializeComponent(cd, fallbackIndex) {
     return {
         id: cd.id != null ? cd.id : STATE.nextId++, type: cd.type, size: cd.size,
         x: pos.x, y: pos.y,
+        name: cd.name || null,
         messages: cd.messages || [], apiSettings: cd.apiSettings || { apiBase: '', apiKey: '', model: '', provider: '自定义' },
         activePromptId: cd.activePromptId || null, activePromptContent: cd.activePromptContent || null,
         jsonSchema: cd.jsonSchema || null, jsonPrompt: cd.jsonPrompt || null,
@@ -412,6 +414,16 @@ const COMPONENT_DEFS = {
             outputs: [{ id: 'vm-out', label: '搜索结果 →' }],
         },
         description: '长期语义记忆库。将文本转换为向量并存储，支持语义相似搜索。连线到 LLM 后可检索历史知识。',
+    },
+    // --- 知识库 ---
+    knowledge_base: {
+        icon: '\u{1F4DA}', title: '知识库', color: '#fa541c', defaultSize: 3,
+        render: renderKnowledgeBasePanel,
+        ports: {
+            outputs: [{ id: 'kb-out', label: '→ 向量记忆' }],
+            inputs: [],
+        },
+        description: '从电脑导入文本文件或粘贴文本到知识库。只能连接到 Vector Memory，可自定义名称（拖出默认 知识库1/2…）。',
     },
     working_memory: {
         icon: '\u{1F4DD}', title: 'Working Memory', color: '#d4b106', defaultSize: 3,
@@ -1005,6 +1017,7 @@ const COMPONENT_CATEGORIES = {
     // 记忆
     memory:             ['记忆', 'cat-memory'],
     token_counter:      ['记忆', 'cat-memory'],
+    knowledge_base:     ['记忆', 'cat-memory'],
     vector_memory:      ['记忆', 'cat-memory'],
     working_memory:     ['记忆', 'cat-memory'],
     token_manager:      ['记忆', 'cat-memory'],
@@ -1124,6 +1137,7 @@ function setupPalletTooltips() {
         conditional: '#389e0d',
         memory:   '#722ed1',
         token_counter: '#f5222d',
+        knowledge_base: '#fa541c',
         vector_memory: '#13c2c2',
         working_memory: '#d4b106',
         system_prompt: '#7cb305',
@@ -1733,6 +1747,13 @@ function addComponent(type, size, id, x, y) {
     pushHistory();
     if (x == null || y == null) { const pos = autoLayoutPosition(STATE.components.length); x = pos.x; y = pos.y; }
     const comp = { id: id || STATE.nextId++, type, size: size || def.defaultSize, x, y, messages: [] };
+    // 知识库组件自动命名：知识库1、知识库2…
+    if (type === 'knowledge_base') {
+        const nums = STATE.components
+            .filter(c => c.type === 'knowledge_base')
+            .map(c => { const m = /知识库(\d+)/.exec(c.name || ''); return m ? parseInt(m[1], 10) : 0; });
+        comp.name = '知识库' + ((nums.length ? Math.max(...nums) : 0) + 1);
+    }
     STATE.components.push(comp);
     renderAll(); updateUI();
     setTimeout(() => selectComponent(comp.id), 50);
@@ -1873,7 +1894,7 @@ function createComponentCard(comp) {
     const connCount = STATE.connections.filter(c => c.sourceCompId === comp.id || c.targetCompId === comp.id).length;
     header.innerHTML = `
         <span class="card-header-icon">${def.icon}</span>
-        <span class="card-header-title">${escapeHtml(def.title)}</span>
+        <span class="card-header-title">${escapeHtml(comp.name || def.title)}</span>
         ${connCount > 0 ? `<span class="card-header-badge" style="background:var(--primary-bg);color:var(--primary);">已连接 ${connCount}</span>` : ''}
         <span class="card-header-badge">w:${comp.size}/12</span>
         <div class="card-header-actions">
@@ -3773,6 +3794,15 @@ function validateConnection(sourceComp, targetComp) {
             `⚠️ Skill Auto Call 只能由 LLM 驱动。\n请将 LLM 的输出端连到 Auto Call 的输入端。`,
             'error'
         );
+        return false;
+    }
+    // 规则：知识库只能连接 Vector Memory（纯输出组件，不可被连接）
+    if (sourceComp.type === 'knowledge_base' && targetComp.type !== 'vector_memory') {
+        showToast('⚠️ 知识库只能连接到 Vector Memory。\n请将知识库的输出端连到向量记忆的输入端。', 'error');
+        return false;
+    }
+    if (targetComp.type === 'knowledge_base') {
+        showToast('⚠️ 知识库是数据导入组件，不能被连接。\n请将知识库的输出端连到 Vector Memory。', 'error');
         return false;
     }
     // 规则：Token 计数器只能连接 LLM
@@ -7858,6 +7888,130 @@ function renderTokenCounterPanel(container, comp) {
         dot.className = `tool-status-dot ${comp.toolEnabled === false ? 'off' : 'on'}`;
         autoSaveConnections();
     });
+}
+
+function renderKnowledgeBasePanel(container, comp) {
+    if (!comp.vectorDocs) comp.vectorDocs = [];
+    if (comp.toolEnabled === undefined) comp.toolEnabled = true;
+    const docs = comp.vectorDocs || [];
+    container.className = 'module-panel';
+    container.innerHTML = `
+        <div class="tool-toggle-row">
+            <span class="tool-status-dot ${comp.toolEnabled ? 'on' : 'off'}"></span>
+            <span style="font-size:12px;font-weight:600;">${comp.toolEnabled ? '已开启' : '已关闭'}</span>
+            <button class="tool-toggle-btn ${comp.toolEnabled ? 'on' : 'off'}" id="kbtog-${comp.id}">${comp.toolEnabled ? '关闭' : '开启'}</button>
+        </div>
+        <div class="module-field">
+            <label>📛 名称</label>
+            <input class="module-input" id="kbname-${comp.id}" value="${escapeHtml(comp.name || '知识库')}" style="font-size:11px;">
+        </div>
+        <div class="module-field">
+            <label>📄 导入文本文件（.txt / .md / .csv / .json）</label>
+            <button class="module-btn" id="kbfile-${comp.id}" style="font-size:11px;width:100%;">📂 从电脑选择文件</button>
+            <input type="file" id="kbfileinput-${comp.id}" accept=".txt,.md,.csv,.json,text/plain" style="display:none;">
+        </div>
+        <div class="module-field">
+            <label>⌨️ 或直接粘贴文本</label>
+            <textarea class="module-textarea" id="kbtext-${comp.id}" placeholder="粘贴要加入知识库的内容…" rows="4" style="font-size:11px;"></textarea>
+            <button class="module-btn" id="kbadd-${comp.id}" style="font-size:11px;width:100%;margin-top:4px;">📥 导入知识库</button>
+        </div>
+        <div class="module-result" id="kbmsg-${comp.id}" style="display:none;"></div>
+        <div class="vm-doc-header">
+            <span>📚 知识库文档</span>
+            <span class="vm-doc-count">${docs.length} 条</span>
+        </div>
+        <div class="module-list" id="kblist-${comp.id}" style="max-height:150px;">
+            ${docs.length === 0
+                ? '<div style="font-size:11px;color:var(--text-muted);padding:8px;text-align:center;">知识库为空，请导入文本</div>'
+                : docs.map((d, i) => `
+                    <div class="module-list-item" style="flex-direction:column;align-items:flex-start;gap:3px;">
+                        <div style="font-size:11px;font-weight:600;">📄 ${escapeHtml(d.title || ('文档 ' + (i + 1)))}</div>
+                        <div style="font-size:10px;color:var(--text-muted);">${escapeHtml((d.text || d.content || '').slice(0, 80))}</div>
+                    </div>`).join('')
+            }
+        </div>
+    `;
+
+    // 开关
+    const togBtn = container.querySelector(`#kbtog-${comp.id}`);
+    const dot = container.querySelector('.tool-status-dot');
+    togBtn.addEventListener('click', () => {
+        comp.toolEnabled = !comp.toolEnabled;
+        togBtn.textContent = comp.toolEnabled ? '关闭' : '开启';
+        togBtn.className = `tool-toggle-btn ${comp.toolEnabled ? 'on' : 'off'}`;
+        dot.className = `tool-status-dot ${comp.toolEnabled ? 'on' : 'off'}`;
+        autoSaveConnections();
+    });
+
+    // 改名
+    const nameInput = container.querySelector(`#kbname-${comp.id}`);
+    nameInput.addEventListener('change', () => {
+        const v = nameInput.value.trim();
+        if (v && v !== comp.name) {
+            comp.name = v;
+            renderAll();
+        }
+    });
+
+    // 从电脑导入文件
+    const fileBtn = container.querySelector(`#kbfile-${comp.id}`);
+    const fileInput = container.querySelector(`#kbfileinput-${comp.id}`);
+    fileBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+        const f = fileInput.files[0];
+        if (!f) return;
+        const reader = new FileReader();
+        reader.onload = () => _kbImport(comp, String(reader.result || ''), container, `📄 ${f.name}`);
+        reader.readAsText(f);
+    });
+
+    // 粘贴文本导入
+    const addBtn = container.querySelector(`#kbadd-${comp.id}`);
+    const textarea = container.querySelector(`#kbtext-${comp.id}`);
+    addBtn.addEventListener('click', () => {
+        const text = (textarea.value || '').trim();
+        _kbImport(comp, text, container, '');
+        textarea.value = '';
+    });
+}
+
+/** 导入文本到知识库（调用 /api/vector-memory/documents 向量化存储） */
+function _kbImport(comp, text, container, title) {
+    const msgEl = container.querySelector(`#kbmsg-${comp.id}`);
+    if (!msgEl) return;
+    if (!text) {
+        msgEl.style.display = 'block';
+        msgEl.textContent = '⚠️ 请选择文件或输入文本';
+        return;
+    }
+    msgEl.style.display = 'block';
+    msgEl.textContent = '⏳ 正在向量化导入…';
+    fetch('/api/vector-memory/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text.slice(0, 20000) }),
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (!d.success) {
+            msgEl.textContent = '❌ ' + (d.error || '导入失败');
+            return;
+        }
+        msgEl.textContent = '✅ ' + (d.result || '导入成功');
+        // 刷新文档列表
+        return fetch('/api/vector-memory/documents')
+            .then(r => r.json())
+            .then(dd => {
+                if (dd.success) {
+                    comp.vectorDocs = dd.documents || [];
+                    if (title && dd.documents && dd.documents.length > 0) {
+                        comp.vectorDocs[comp.vectorDocs.length - 1].title = title;
+                    }
+                }
+                renderAll();
+            });
+    })
+    .catch(e => { msgEl.textContent = '❌ ' + e.message; });
 }
 
 function renderSimpleToolPanel(toolName, desc) {
