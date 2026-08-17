@@ -38,9 +38,12 @@ baidu_debug.json
 # 用户项目数据（含个人对话内容，不推送到公开仓库）
 data/projects/*.json
 
+# 本地会话记录（不发布）
+SESSION_SUMMARY.md
+
 # 系统文件
 Thumbs.db
 Desktop.ini
 
-# ���ػỰ��¼����������
-SESSION_SUMMARY.md
+# ── 例外：docs/ 下的文档表格随仓库发布 ──
+!docs/*.xlsx
