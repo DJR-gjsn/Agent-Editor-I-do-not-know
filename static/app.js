@@ -15,6 +15,7 @@ const STATE = {
     dragSource: null,
     dragCompId: null,
     selectedCompId: null,
+    multiSelected: [],      // 框选/Ctrl 多选的组件 id 集合
     mcpSaveDir: null,       // FileSystemDirectoryHandle
     mcpSaveDirName: '',     // 目录名（用于显示）
     history: [],            // 撤回快照栈
@@ -27,6 +28,16 @@ const DRAG = {
     startMouseX: 0, startMouseY: 0,
     origLeftPct: 0, origTopPct: 0,
     active: false, moved: false,
+    group: null,            // 框选组拖动: [{id, card, origLeftPct, origTopPct}]
+};
+
+// ── 框选状态 ──
+const SELBOX = {
+    active: false,
+    startX: 0, startY: 0,
+    curX: 0, curY: 0,
+    el: null,
+    suppressClick: false,   // 框选结束后抑制下一次画布 click（防止清除选中）
 };
 
 // ── 撤回系统 ──
@@ -861,6 +872,7 @@ async function init() {
     setupPalletTooltips();
     setupCanvasDrop();
     setupCanvasClick();
+    setupBoxSelection();
     setupCanvasZoomPan();
     setupDocumentHandlers();
     setupPresetButtons();
@@ -1263,10 +1275,86 @@ function setupCanvasDrop() {
 
 function setupCanvasClick() {
     canvas.addEventListener('click', (e) => {
+        // 框选刚结束时抑制本事件，避免清除刚选中的组
+        if (SELBOX.suppressClick) {
+            SELBOX.suppressClick = false;
+            return;
+        }
         if (e.target === canvas || e.target.id === 'canvas' || e.target.id === 'canvas-viewport' || e.target.id === 'connections-layer') {
             selectComponent(null);
         }
     });
+}
+
+// ============================================================
+// 框选（左键在画布空白处拖拽）
+// ============================================================
+function setupBoxSelection() {
+    canvas.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        if (e.target.closest('.component-card')) return;
+        if (e.target.closest('.port-input') || e.target.closest('.port-output')) return;
+        if (e.target.closest('#connections-layer')) return;
+        // 只在画布/视口背景上开始
+        const id = e.target.id;
+        if (id !== 'canvas' && id !== 'canvas-viewport') return;
+        e.preventDefault();
+        const p = screenToViewport(e.clientX, e.clientY);
+        SELBOX.startX = p.x; SELBOX.startY = p.y;
+        SELBOX.curX = p.x; SELBOX.curY = p.y;
+        SELBOX.active = true;
+        if (!SELBOX.el) {
+            SELBOX.el = document.createElement('div');
+            SELBOX.el.className = 'selection-box';
+            const vp = document.getElementById('canvas-viewport');
+            if (vp) vp.appendChild(SELBOX.el);
+        }
+        SELBOX.el.style.display = 'block';
+        _updateSelBox();
+    });
+}
+
+function _updateSelBox() {
+    if (!SELBOX.active || !SELBOX.el) return;
+    const x = Math.min(SELBOX.startX, SELBOX.curX);
+    const y = Math.min(SELBOX.startY, SELBOX.curY);
+    const w = Math.abs(SELBOX.curX - SELBOX.startX);
+    const h = Math.abs(SELBOX.curY - SELBOX.startY);
+    SELBOX.el.style.left = x + 'px';
+    SELBOX.el.style.top = y + 'px';
+    SELBOX.el.style.width = w + 'px';
+    SELBOX.el.style.height = h + 'px';
+
+    // 高亮与选框相交的卡片
+    const cr = canvas.getBoundingClientRect();
+    canvas.querySelectorAll('.component-card').forEach(card => {
+        const r = card.getBoundingClientRect();
+        const l = (r.left - cr.left - CANVAS_VIEW.panX) / CANVAS_VIEW.zoom;
+        const t = (r.top - cr.top - CANVAS_VIEW.panY) / CANVAS_VIEW.zoom;
+        const cw = r.width / CANVAS_VIEW.zoom;
+        const ch = r.height / CANVAS_VIEW.zoom;
+        const hit = l < x + w && l + cw > x && t < y + h && t + ch > y;
+        card.classList.toggle('box-selected', hit);
+    });
+}
+
+function _finishSelBox() {
+    if (!SELBOX.active) return;
+    SELBOX.active = false;
+    if (SELBOX.el) SELBOX.el.style.display = 'none';
+    const ids = [];
+    canvas.querySelectorAll('.component-card.box-selected').forEach(card => {
+        ids.push(parseInt(card.dataset.compId));
+    });
+    if (ids.length > 0) {
+        STATE.multiSelected = ids;
+        STATE.selectedCompId = null;
+        SELBOX.suppressClick = true;
+        renderAll();   // 重绘以应用 box-selected 高亮
+    } else {
+        STATE.multiSelected = [];
+        selectComponent(null);
+    }
 }
 
 // ============================================================
@@ -1378,11 +1466,25 @@ function screenToViewport(screenX, screenY) {
 
 function selectComponent(compId) {
     STATE.selectedCompId = compId;
+    if (compId === null) STATE.multiSelected = [];  // 单击空白清空多选
     document.querySelectorAll('.component-card').forEach(card => {
         const id = parseInt(card.dataset.compId);
         card.classList.toggle('selected', id === compId);
+        card.classList.toggle('box-selected', STATE.multiSelected.includes(id));
     });
     renderPropsPanel(compId);
+}
+
+/** Ctrl/⌘+点击：把组件加入/移出多选组 */
+function toggleMultiSelect(compId) {
+    const idx = STATE.multiSelected.indexOf(compId);
+    if (idx >= 0) {
+        STATE.multiSelected.splice(idx, 1);
+    } else {
+        STATE.multiSelected.push(compId);
+    }
+    STATE.selectedCompId = null;
+    renderAll();
 }
 
 // ============================================================
@@ -1444,6 +1546,14 @@ function setupDocumentHandlers() {
         window._lastMouseX = e.clientX;
         window._lastMouseY = e.clientY;
 
+        // --- 框选拖拽 ---
+        if (SELBOX.active) {
+            const p = screenToViewport(e.clientX, e.clientY);
+            SELBOX.curX = p.x; SELBOX.curY = p.y;
+            _updateSelBox();
+            return;
+        }
+
         // --- 连线拖拽 ---
         if (WIRE.active) {
             const vpLocal = screenToViewport(e.clientX, e.clientY);
@@ -1470,16 +1580,29 @@ function setupDocumentHandlers() {
         // 将屏幕像素位移转换为视口百分比位移（考虑缩放）
         const dxPct = (dx / CANVAS_VIEW.zoom / cr.width) * 100;
         const dyPct = (dy / CANVAS_VIEW.zoom / cr.height) * 100;
-        const comp = STATE.components.find(c => c.id === DRAG.compId);
-        if (!comp) return;
-        DRAG.card.style.left = (DRAG.origLeftPct + dxPct) + '%';
-        DRAG.card.style.top = (DRAG.origTopPct + dyPct) + '%';
+        if (DRAG.group) {
+            // 框选组：所有卡片按各自起点同步位移
+            DRAG.group.forEach(g => {
+                g.card.style.left = (g.origLeftPct + dxPct) + '%';
+                g.card.style.top = (g.origTopPct + dyPct) + '%';
+            });
+        } else {
+            const comp = STATE.components.find(c => c.id === DRAG.compId);
+            if (!comp) return;
+            DRAG.card.style.left = (DRAG.origLeftPct + dxPct) + '%';
+            DRAG.card.style.top = (DRAG.origTopPct + dyPct) + '%';
+        }
         // 拖动时实时刷新连线
         refreshAllConnectionPaths();
     });
 
     document.addEventListener('mouseup', (e) => {
         _stopEdgeScroll();
+        // --- 框选结束 ---
+        if (SELBOX.active) {
+            _finishSelBox();
+            return;
+        }
         // --- 连线拖拽结束 ---
         if (WIRE.active) {
             const targetEl = document.elementFromPoint(e.clientX, e.clientY);
@@ -1526,22 +1649,32 @@ function setupDocumentHandlers() {
         // --- 卡片拖拽结束 ---
         if (!DRAG.active) return;
         if (DRAG.moved && DRAG.card) {
-            const comp = STATE.components.find(c => c.id === DRAG.compId);
-            if (comp) {
-                const cr = canvas.getBoundingClientRect();
-                const r = DRAG.card.getBoundingClientRect();
-                // 将屏幕坐标转换为视口本地坐标
+            const cr = canvas.getBoundingClientRect();
+            // 整组或单卡统一提交坐标
+            const targets = DRAG.group || [{ id: DRAG.compId, card: DRAG.card }];
+            targets.forEach(t => {
+                const g = STATE.components.find(c => c.id === t.id);
+                if (!g || !t.card) return;
+                const r = t.card.getBoundingClientRect();
                 const localLeft = (r.left - cr.left - CANVAS_VIEW.panX) / CANVAS_VIEW.zoom;
                 const localTop = (r.top - cr.top - CANVAS_VIEW.panY) / CANVAS_VIEW.zoom;
-                comp.x = (localLeft / cr.width) * 100;
-                comp.y = (localTop / cr.height) * 100;
-                renderAll();
-                if (comp.id === STATE.selectedCompId) renderPropsPanel(comp.id);
+                g.x = (localLeft / cr.width) * 100;
+                g.y = (localTop / cr.height) * 100;
+            });
+            renderAll();
+            if (DRAG.group) {
+                // 组拖动后保持多选高亮
+                STATE.multiSelected.forEach(id => {
+                    const c = canvas.querySelector(`[data-comp-id="${id}"]`);
+                    if (c) c.classList.add('box-selected');
+                });
+            } else if (DRAG.compId === STATE.selectedCompId) {
+                renderPropsPanel(DRAG.compId);
             }
         }
         if (DRAG.card) DRAG.card.classList.remove('is-dragging');
         DRAG.card = null; DRAG.compId = null;
-        DRAG.active = false; DRAG.moved = false;
+        DRAG.active = false; DRAG.moved = false; DRAG.group = null;
     });
 }
 
@@ -1562,6 +1695,20 @@ function bindCardDrag(card, comp) {
         DRAG.origLeftPct = (localLeft / cr.width) * 100;
         DRAG.origTopPct = (localTop / cr.height) * 100;
         DRAG.active = true; DRAG.moved = false;
+        // 框选组拖动：若该卡片在多选组内，记录整组起点
+        if (STATE.multiSelected.includes(comp.id) && STATE.multiSelected.length > 1) {
+            DRAG.group = STATE.multiSelected.map(gid => {
+                const g = STATE.components.find(c => c.id === gid);
+                const gCard = canvas.querySelector(`[data-comp-id="${gid}"]`);
+                if (!g || !gCard) return null;
+                const gr = gCard.getBoundingClientRect();
+                const gl = (gr.left - cr.left - CANVAS_VIEW.panX) / CANVAS_VIEW.zoom;
+                const gt = (gr.top - cr.top - CANVAS_VIEW.panY) / CANVAS_VIEW.zoom;
+                return { id: gid, card: gCard, origLeftPct: (gl / cr.width) * 100, origTopPct: (gt / cr.height) * 100 };
+            }).filter(Boolean);
+        } else {
+            DRAG.group = null;
+        }
     });
 }
 
@@ -1593,6 +1740,20 @@ function removeComponent(compId) {
     renderAll(); updateUI();
 }
 
+/** 批量删除多个组件（含其全部连线） */
+function removeComponents(ids) {
+    if (!ids || ids.length === 0) return;
+    pushHistory();
+    const idSet = new Set(ids);
+    STATE.components = STATE.components.filter(c => !idSet.has(c.id));
+    STATE.connections = STATE.connections.filter(
+        c => !idSet.has(c.sourceCompId) && !idSet.has(c.targetCompId)
+    );
+    STATE.multiSelected = [];
+    if (STATE.selectedCompId != null && idSet.has(STATE.selectedCompId)) selectComponent(null);
+    renderAll(); updateUI();
+}
+
 function resizeComponent(compId) {
     const comp = STATE.components.find(c => c.id === compId);
     if (!comp) return;
@@ -1612,6 +1773,10 @@ function renderAll() {
     STATE.components.filter(c => c.type === 'executor').forEach(c => refreshExecutorTools(c));
 
     const selectedId = STATE.selectedCompId;
+
+    // 清理框选元素（视口会被重建）
+    if (SELBOX.el) { SELBOX.el.remove(); SELBOX.el = null; }
+    SELBOX.active = false;
 
     // 清空画布并创建视口（比 innerHTML 更高效的 DOM 清除）
     while (canvas.firstChild) canvas.removeChild(canvas.firstChild);
@@ -1688,6 +1853,7 @@ function createComponentCard(comp) {
     card.style.left = comp.x + '%';
     card.style.top = comp.y + '%';
     if (comp.id === STATE.selectedCompId) card.classList.add('selected');
+    if (STATE.multiSelected.includes(comp.id)) card.classList.add('box-selected');
 
     // --- 头部 ---
     const header = document.createElement('div');
@@ -1705,7 +1871,14 @@ function createComponentCard(comp) {
     `;
     header.querySelector('.btn-resize').addEventListener('click', (e) => { e.stopPropagation(); resizeComponent(comp.id); });
     header.querySelector('.btn-remove').addEventListener('click', (e) => { e.stopPropagation(); removeComponent(comp.id); });
-    card.addEventListener('click', (e) => { e.stopPropagation(); selectComponent(comp.id); });
+    card.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (e.ctrlKey || e.metaKey) {
+            toggleMultiSelect(comp.id);
+        } else {
+            selectComponent(comp.id);
+        }
+    });
 
     // --- 内容 ---
     const body = document.createElement('div');
@@ -7722,6 +7895,17 @@ function bindToolbarButtons() {
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
             e.preventDefault();
             undo();
+        }
+        // Delete / Backspace 删除：优先多选组，其次单选
+        if ((e.key === 'Delete' || e.key === 'Backspace') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            const tag = e.target.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            e.preventDefault();
+            if (STATE.multiSelected.length > 0) {
+                removeComponents(STATE.multiSelected);
+            } else if (STATE.selectedCompId != null) {
+                removeComponent(STATE.selectedCompId);
+            }
         }
     });
 

@@ -3065,6 +3065,21 @@ select { background: var(--bg-input); color: var(--text-primary); border-color: 
 }
 .chat-token-bar .token-bar-hint { margin-left: auto; opacity: 0.7; }
 
+/* 框选选框 + 多选高亮 */
+.selection-box {
+    position: absolute;
+    border: 1px dashed var(--primary, #4A90D9);
+    background: rgba(74, 144, 217, 0.12);
+    pointer-events: none;
+    z-index: 60;
+    display: none;
+}
+.component-card.box-selected {
+    outline: 2px solid var(--primary, #4A90D9);
+    outline-offset: 1px;
+    box-shadow: 0 0 0 1px var(--primary-bg, rgba(74,144,217,0.25));
+}
+
 /* 滑块设置行 */
 .settings-slider-row {
     display: flex; align-items: center; gap: 10px;
