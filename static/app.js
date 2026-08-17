@@ -1351,6 +1351,7 @@ function _finishSelBox() {
         STATE.selectedCompId = null;
         SELBOX.suppressClick = true;
         renderAll();   // 重绘以应用 box-selected 高亮
+        renderPropsPanel(null);
     } else {
         STATE.multiSelected = [];
         selectComponent(null);
@@ -1485,6 +1486,7 @@ function toggleMultiSelect(compId) {
     }
     STATE.selectedCompId = null;
     renderAll();
+    renderPropsPanel(null);
 }
 
 // ============================================================
