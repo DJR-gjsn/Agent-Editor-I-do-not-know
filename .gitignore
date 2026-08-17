@@ -47,3 +47,6 @@ Desktop.ini
 
 # ── 例外：docs/ 下的文档表格随仓库发布 ──
 !docs/*.xlsx
+
+# ��Ŀ�򱨣����ؽ����ã���������
+PROJECT_BRIEF.md
