@@ -757,7 +757,17 @@ function restoreDisplaySettings() {
 
 function applyFontSize(scale) {
     scale = Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, scale || FONT_SIZE_DEFAULT));
-    document.documentElement.style.zoom = scale;
+    // 仅在非默认值时设置 zoom：zoom:1 显式设置会与画布 transform:scale 合成层
+    // 冲突（Chromium bug → 滚轮缩放时边缘组件变黑/色块、内容不重绘）
+    if (Math.abs(scale - 1.0) < 0.001) {
+        document.documentElement.style.zoom = '';
+    } else {
+        document.documentElement.style.zoom = scale;
+    }
+    // 非默认字号时摘掉画布视口的合成层（will-change:transform + zoom 是黑块 bug 的组合条件），
+    // 避免滚轮缩放时边缘组件变黑/色块
+    const vp = document.getElementById('canvas-viewport');
+    if (vp) vp.style.willChange = (Math.abs(scale - 1.0) < 0.001) ? 'transform' : 'auto';
     safeStorage.set(FONT_SIZE_KEY, scale);
     const valEl = document.getElementById('fontsize-value');
     if (valEl) valEl.textContent = Math.round(scale * 100) + '%';

@@ -45,9 +45,14 @@ const modelBadge = document.getElementById('chat-model');
 })();
 
 (function restoreDisplaySettings() {
-    // 字体大小（zoom）与行距（--ui-lh），与编辑器设置面板共享数值
+    // 字体大小（zoom）与行距（--ui-lh），与编辑器设置面板共享数值。
+    // 注意：仅在非默认字号时设置 zoom，避免与画布 transform 合成层冲突（Chromium bug）
     const fs = parseFloat(safeStorage.get('wybzd-font-size'));
-    document.documentElement.style.zoom = (fs >= 0.5 && fs <= 2) ? fs : 1.0;
+    if (fs >= 0.5 && fs <= 2 && Math.abs(fs - 1) > 0.001) {
+        document.documentElement.style.zoom = fs;
+    } else {
+        document.documentElement.style.zoom = '';
+    }
     const lh = parseFloat(safeStorage.get('wybzd-line-height'));
     document.documentElement.style.setProperty('--ui-lh', String((lh >= 1.0 && lh <= 3) ? lh : 1.6));
 })();
