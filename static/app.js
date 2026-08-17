@@ -713,8 +713,9 @@ const THEME_KEY = 'wybzd-theme';
 const FONT_SIZE_KEY = 'wybzd-font-size';
 const LINE_HEIGHT_KEY = 'wybzd-line-height';
 
-const FONT_SIZE_MAP = { small: 0.9, medium: 1.0, large: 1.1 };
-const LINE_HEIGHT_MAP = { compact: 1.4, normal: 1.6, relaxed: 1.9 };
+// 滑块范围
+const FONT_SIZE_MIN = 0.8, FONT_SIZE_MAX = 1.2, FONT_SIZE_DEFAULT = 1.0;
+const LINE_HEIGHT_MIN = 1.2, LINE_HEIGHT_MAX = 2.2, LINE_HEIGHT_DEFAULT = 1.6;
 
 function restoreTheme() {
     const saved = safeStorage.get(THEME_KEY) || 'industrial';
@@ -732,28 +733,28 @@ function applyTheme(theme) {
 
 /** 恢复显示设置（字体大小/行距），编辑器与对话页共用 localStorage */
 function restoreDisplaySettings() {
-    const fs = safeStorage.get(FONT_SIZE_KEY) || 'medium';
-    applyFontSize(fs);
-    const lh = safeStorage.get(LINE_HEIGHT_KEY) || 'normal';
-    applyLineHeight(lh);
+    applyFontSize(parseFloat(safeStorage.get(FONT_SIZE_KEY)) || FONT_SIZE_DEFAULT);
+    applyLineHeight(parseFloat(safeStorage.get(LINE_HEIGHT_KEY)) || LINE_HEIGHT_DEFAULT);
 }
 
-function applyFontSize(size) {
-    const scale = FONT_SIZE_MAP[size] || 1.0;
+function applyFontSize(scale) {
+    scale = Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, scale || FONT_SIZE_DEFAULT));
     document.documentElement.style.zoom = scale;
-    safeStorage.set(FONT_SIZE_KEY, size);
-    document.querySelectorAll('.theme-option[data-fontsize]').forEach(opt => {
-        opt.classList.toggle('active', opt.dataset.fontsize === size);
-    });
+    safeStorage.set(FONT_SIZE_KEY, scale);
+    const valEl = document.getElementById('fontsize-value');
+    if (valEl) valEl.textContent = Math.round(scale * 100) + '%';
+    const slider = document.getElementById('fontsize-slider');
+    if (slider) slider.value = String(scale);
 }
 
 function applyLineHeight(lh) {
-    const val = LINE_HEIGHT_MAP[lh] || 1.6;
-    document.documentElement.style.setProperty('--ui-lh', String(val));
+    lh = Math.min(LINE_HEIGHT_MAX, Math.max(LINE_HEIGHT_MIN, lh || LINE_HEIGHT_DEFAULT));
+    document.documentElement.style.setProperty('--ui-lh', String(lh));
     safeStorage.set(LINE_HEIGHT_KEY, lh);
-    document.querySelectorAll('.theme-option[data-lineheight]').forEach(opt => {
-        opt.classList.toggle('active', opt.dataset.lineheight === lh);
-    });
+    const valEl = document.getElementById('lineheight-value');
+    if (valEl) valEl.textContent = lh.toFixed(1);
+    const slider = document.getElementById('lineheight-slider');
+    if (slider) slider.value = String(lh);
 }
 
 function setupSettingsPanel() {
@@ -761,8 +762,8 @@ function setupSettingsPanel() {
     const overlay = document.getElementById('settings-overlay');
     const btnClose = document.getElementById('settings-close');
     const themeOptions = document.getElementById('theme-options');
-    const fontSizeOptions = document.getElementById('fontsize-options');
-    const lineHeightOptions = document.getElementById('lineheight-options');
+    const fontSizeSlider = document.getElementById('fontsize-slider');
+    const lineHeightSlider = document.getElementById('lineheight-slider');
 
     if (!btnSettings || !overlay) return;
 
@@ -772,8 +773,8 @@ function setupSettingsPanel() {
         // 同步当前选中状态
         const current = document.documentElement.getAttribute('data-theme') || 'industrial';
         applyTheme(current);
-        applyFontSize(safeStorage.get(FONT_SIZE_KEY) || 'medium');
-        applyLineHeight(safeStorage.get(LINE_HEIGHT_KEY) || 'normal');
+        applyFontSize(parseFloat(safeStorage.get(FONT_SIZE_KEY)) || FONT_SIZE_DEFAULT);
+        applyLineHeight(parseFloat(safeStorage.get(LINE_HEIGHT_KEY)) || LINE_HEIGHT_DEFAULT);
     });
 
     // 关闭设置
@@ -794,23 +795,19 @@ function setupSettingsPanel() {
         });
     });
 
-    // 字体大小
-    fontSizeOptions.querySelectorAll('.theme-option').forEach(btn => {
-        btn.addEventListener('click', () => {
-            applyFontSize(btn.dataset.fontsize);
-            const names = { small: 'Small', medium: 'Medium', large: 'Large' };
-            showToast(`Font Size: ${names[btn.dataset.fontsize]}`, 'success');
+    // 字体大小（滑块）
+    if (fontSizeSlider) {
+        fontSizeSlider.addEventListener('input', () => {
+            applyFontSize(parseFloat(fontSizeSlider.value));
         });
-    });
+    }
 
-    // 行距
-    lineHeightOptions.querySelectorAll('.theme-option').forEach(btn => {
-        btn.addEventListener('click', () => {
-            applyLineHeight(btn.dataset.lineheight);
-            const names = { compact: 'Compact', normal: 'Normal', relaxed: 'Relaxed' };
-            showToast(`Line Height: ${names[btn.dataset.lineheight]}`, 'success');
+    // 行距（滑块）
+    if (lineHeightSlider) {
+        lineHeightSlider.addEventListener('input', () => {
+            applyLineHeight(parseFloat(lineHeightSlider.value));
         });
-    });
+    }
 }
 
 // ============================================================

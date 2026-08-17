@@ -3018,7 +3018,9 @@ select { background: var(--bg-input); color: var(--text-primary); border-color: 
 [data-theme="blue"] .settings-overlay { background: rgba(0,0,0,0.2); }
 
 .settings-panel {
-    width: 380px; max-width: 90vw;
+    width: min(460px, 90vw);
+    height: min(460px, 90vh);   /* 正方形设置框 */
+    display: flex; flex-direction: column;
     background: var(--bg-card);
     border: 1px solid var(--border);
     animation: settingsIn 0.2s ease;
@@ -3045,7 +3047,26 @@ select { background: var(--bg-input); color: var(--text-primary); border-color: 
 }
 .settings-close:hover { color: var(--danger); border-color: var(--border); }
 
-.settings-body { padding: 16px; }
+.settings-body { padding: 16px; flex: 1; overflow-y: auto; }
+
+/* 滑块设置行 */
+.settings-slider-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 2px 0 10px;
+}
+.settings-slider-row input[type="range"] {
+    flex: 1; min-width: 0; cursor: pointer;
+    accent-color: var(--primary, #4A90D9);
+}
+.slider-label {
+    font-size: 11px; color: var(--text-muted);
+    font-family: var(--font-mono); flex-shrink: 0;
+}
+.slider-value {
+    min-width: 42px; text-align: right;
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-primary); font-weight: 700;
+}
 
 .settings-group { margin-bottom: 16px; }
 .settings-label {

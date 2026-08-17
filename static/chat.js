@@ -44,13 +44,11 @@ const modelBadge = document.getElementById('chat-model');
 })();
 
 (function restoreDisplaySettings() {
-    // 字体大小（zoom）与行距（--ui-lh）
-    const FONT_SIZE_MAP = { small: 0.9, medium: 1.0, large: 1.1 };
-    const LINE_HEIGHT_MAP = { compact: 1.4, normal: 1.6, relaxed: 1.9 };
-    const fs = safeStorage.get('wybzd-font-size') || 'medium';
-    document.documentElement.style.zoom = FONT_SIZE_MAP[fs] || 1.0;
-    const lh = safeStorage.get('wybzd-line-height') || 'normal';
-    document.documentElement.style.setProperty('--ui-lh', String(LINE_HEIGHT_MAP[lh] || 1.6));
+    // 字体大小（zoom）与行距（--ui-lh），与编辑器设置面板共享数值
+    const fs = parseFloat(safeStorage.get('wybzd-font-size'));
+    document.documentElement.style.zoom = (fs >= 0.5 && fs <= 2) ? fs : 1.0;
+    const lh = parseFloat(safeStorage.get('wybzd-line-height'));
+    document.documentElement.style.setProperty('--ui-lh', String((lh >= 1.0 && lh <= 3) ? lh : 1.6));
 })();
 
 // ============================================================

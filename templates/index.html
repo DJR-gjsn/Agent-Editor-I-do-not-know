@@ -905,54 +905,20 @@
                 </div>
                 <div class="settings-group">
                     <label class="settings-label">Font Size / 字体大小</label>
-                    <div class="theme-options" id="fontsize-options">
-                        <button class="theme-option" data-fontsize="small">
-                            <span class="theme-swatch industrial" style="border-radius:4px;"><span style="font-size:9px;color:#fff;">A</span></span>
-                            <span class="theme-info">
-                                <strong>Small</strong>
-                                <small>小 · 0.9x</small>
-                            </span>
-                        </button>
-                        <button class="theme-option active" data-fontsize="medium">
-                            <span class="theme-swatch industrial" style="border-radius:4px;"><span style="font-size:12px;color:#fff;">A</span></span>
-                            <span class="theme-info">
-                                <strong>Medium</strong>
-                                <small>中 · 1.0x（默认）</small>
-                            </span>
-                        </button>
-                        <button class="theme-option" data-fontsize="large">
-                            <span class="theme-swatch industrial" style="border-radius:4px;"><span style="font-size:15px;color:#fff;">A</span></span>
-                            <span class="theme-info">
-                                <strong>Large</strong>
-                                <small>大 · 1.1x</small>
-                            </span>
-                        </button>
+                    <div class="settings-slider-row">
+                        <span class="slider-label">A−</span>
+                        <input type="range" id="fontsize-slider" min="0.8" max="1.2" step="0.05" value="1">
+                        <span class="slider-label">A＋</span>
+                        <span class="slider-value" id="fontsize-value">100%</span>
                     </div>
                 </div>
                 <div class="settings-group">
                     <label class="settings-label">Line Height / 行距</label>
-                    <div class="theme-options" id="lineheight-options">
-                        <button class="theme-option" data-lineheight="compact">
-                            <span class="theme-swatch blue" style="border-radius:4px;"></span>
-                            <span class="theme-info">
-                                <strong>Compact</strong>
-                                <small>紧凑 · 1.4</small>
-                            </span>
-                        </button>
-                        <button class="theme-option active" data-lineheight="normal">
-                            <span class="theme-swatch blue" style="border-radius:4px;"></span>
-                            <span class="theme-info">
-                                <strong>Normal</strong>
-                                <small>标准 · 1.6（默认）</small>
-                            </span>
-                        </button>
-                        <button class="theme-option" data-lineheight="relaxed">
-                            <span class="theme-swatch blue" style="border-radius:4px;"></span>
-                            <span class="theme-info">
-                                <strong>Relaxed</strong>
-                                <small>宽松 · 1.9</small>
-                            </span>
-                        </button>
+                    <div class="settings-slider-row">
+                        <span class="slider-label">窄</span>
+                        <input type="range" id="lineheight-slider" min="1.2" max="2.2" step="0.1" value="1.6">
+                        <span class="slider-label">宽</span>
+                        <span class="slider-value" id="lineheight-value">1.6</span>
                     </div>
                 </div>
             </div>

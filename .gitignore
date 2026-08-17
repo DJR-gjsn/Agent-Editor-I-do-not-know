@@ -41,3 +41,6 @@ data/projects/*.json
 # 绯荤粺鏂囦欢
 Thumbs.db
 Desktop.ini
+
+# 本地会话记录（不发布）
+SESSION_SUMMARY.md
