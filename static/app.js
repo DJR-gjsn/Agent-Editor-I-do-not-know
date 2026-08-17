@@ -3305,11 +3305,11 @@ function renderTokenManagerPanel(container, comp) {
         </div>
         <div class="module-field"><label>模型</label>
             <select class="module-select" id="tmo-${comp.id}">
-                <option value="gpt-4o">gpt-4o (128K)</option>
-                <option value="gpt-4-turbo">gpt-4-turbo (128K)</option>
-                <option value="gpt-3.5-turbo">gpt-3.5-turbo (16K)</option>
+                <option value="gpt-5">gpt-5 (128K)</option>
+                <option value="gpt-5-mini">gpt-5-mini (128K)</option>
                 <option value="deepseek-chat">deepseek-chat (64K)</option>
-                <option value="glm-4">glm-4 (128K)</option>
+                <option value="glm-5">glm-5 (128K)</option>
+                <option value="qwen-max">qwen-max (128K)</option>
             </select>
         </div>
         <button class="module-btn" id="tvs-${comp.id}">\u{1F3AF} 统计 Token</button>
@@ -7603,13 +7603,14 @@ function bindToolbarButtons() {
 // API 供应商预设
 // ============================================================
 const API_PROVIDERS = [
-    { name: 'OpenAI', url: 'https://api.openai.com/v1', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo'] },
-    { name: 'Groq', url: 'https://api.groq.com/openai/v1', models: ['llama-3.1-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it'] },
-    { name: 'DeepSeek', url: 'https://api.deepseek.com/v1', models: ['deepseek-chat', 'deepseek-v4-flash', 'deepseek-coder', 'deepseek-reasoner'] },
-    { name: '智谱 (GLM)', url: 'https://open.bigmodel.cn/api/paas/v4', models: ['glm-4', 'glm-4-flash', 'glm-4v', 'glm-3-turbo'] },
-    { name: '通义千问', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', models: ['qwen-turbo', 'qwen-plus', 'qwen-max'] },
-    { name: 'Moonshot (Kimi)', url: 'https://api.moonshot.cn/v1', models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'] },
-    { name: 'Ollama (本地)', url: 'http://localhost:11434/v1', models: ['llama3', 'qwen2', 'mistral', 'gemma2', 'phi3'] },
+    { name: 'OpenAI', url: 'https://api.openai.com/v1', models: ['gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-5.2'] },
+    { name: 'Groq', url: 'https://api.groq.com/openai/v1', models: ['llama-4-maverick-17b-128e-instruct', 'llama-4-scout-17b-16e-instruct', 'llama-3.3-70b-versatile'] },
+    { name: 'DeepSeek', url: 'https://api.deepseek.com/v1', models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-flash'] },
+    { name: '智谱 (GLM)', url: 'https://open.bigmodel.cn/api/paas/v4', models: ['glm-5', 'glm-5-flash', 'glm-4.5', 'glm-4v-plus'] },
+    { name: '通义千问', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', models: ['qwen-max', 'qwen-plus', 'qwen-turbo', 'qwen3.8-max'] },
+    { name: 'Moonshot (Kimi)', url: 'https://api.moonshot.cn/v1', models: ['kimi-k3', 'kimi-k2-turbo-preview', 'moonshot-v1-128k'] },
+    { name: 'Google Gemini', url: 'https://generativelanguage.googleapis.com/v1beta/openai', models: ['gemini-2.5-pro', 'gemini-2.5-flash'] },
+    { name: 'Ollama (本地)', url: 'http://localhost:11434/v1', models: ['llama3.3', 'qwen3', 'mistral', 'gemma3', 'phi4'] },
     { name: '自定义', url: '', models: [] },
 ];
 
