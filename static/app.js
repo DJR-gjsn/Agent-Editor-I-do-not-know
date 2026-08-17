@@ -315,6 +315,13 @@ const COMPONENT_DEFS = {
         ports: { outputs: [{ id: 'mem-out', label: '历史 →' }], inputs: [{ id: 'mem-in', label: '写入' }] },
         description: '存储对话历史。连线到 LLM 组件后，AI 会记住之前的对话内容。断开连线则每次都是全新对话。',
     },
+    // --- Token 计数器 ---
+    token_counter: {
+        icon: '\u{1F9EE}', title: 'Token 计数器', color: '#f5222d', defaultSize: 3,
+        render: renderTokenCounterPanel,
+        ports: { inputs: [{ id: 'tc-llm-in', label: 'LLM 接入' }], outputs: [] },
+        description: '连接 LLM 后，AI 对话页的输入框上方会实时显示本次对话的 Token 用量。只能连接 LLM。',
+    },
     system_prompt: {
         icon: '\u{1F3AD}', title: 'System Prompt', color: '#52c41a', defaultSize: 5,
         render: renderSystemPromptPanel,
@@ -975,6 +982,7 @@ const COMPONENT_CATEGORIES = {
     conditional:        ['流程', 'cat-flow'],
     // 记忆
     memory:             ['记忆', 'cat-memory'],
+    token_counter:      ['记忆', 'cat-memory'],
     vector_memory:      ['记忆', 'cat-memory'],
     working_memory:     ['记忆', 'cat-memory'],
     token_manager:      ['记忆', 'cat-memory'],
@@ -1093,6 +1101,7 @@ function setupPalletTooltips() {
         loop:     '#7b1fa2',
         conditional: '#389e0d',
         memory:   '#722ed1',
+        token_counter: '#f5222d',
         vector_memory: '#13c2c2',
         working_memory: '#d4b106',
         system_prompt: '#7cb305',
@@ -3579,6 +3588,15 @@ function validateConnection(sourceComp, targetComp) {
             `⚠️ Skill Auto Call 只能由 LLM 驱动。\n请将 LLM 的输出端连到 Auto Call 的输入端。`,
             'error'
         );
+        return false;
+    }
+    // 规则：Token 计数器只能连接 LLM
+    if (sourceComp.type === 'token_counter' && targetComp.type !== 'llm') {
+        showToast('⚠️ Token 计数器只能连接到 LLM。\n请将 LLM 的输出端连到计数器的输入端。', 'error');
+        return false;
+    }
+    if (targetComp.type === 'token_counter' && sourceComp.type !== 'llm') {
+        showToast('⚠️ Token 计数器只能由 LLM 驱动。\n请将 LLM 的输出端连到计数器的输入端。', 'error');
         return false;
     }
     // 规则：LLM 通过 Skill Auto Call 后不能再直连 Skills Manager
@@ -6899,6 +6917,15 @@ const autoSaveConnections = debounce(() => {
             delete cfg.skills;
         }
 
+        // 同步 Token 计数器连接状态到聊天页（仅当连接到 LLM 且开启时生效）
+        const tcComps = STATE.components.filter(c => c.type === 'token_counter' && c.toolEnabled !== false);
+        cfg.tokenCounter = tcComps.length > 0 && STATE.connections.some(c => {
+            const src = STATE.components.find(x => x.id === c.sourceCompId);
+            const tgt = STATE.components.find(x => x.id === c.targetCompId);
+            return (src && src.type === 'llm' && tgt && tgt.type === 'token_counter') ||
+                   (tgt && tgt.type === 'llm' && src && src.type === 'token_counter');
+        });
+
         cfg.savedAt = new Date().toISOString();
         safeStorage.set('active-llm-config', cfg);
 
@@ -7617,6 +7644,37 @@ function renderSkillPanel(skillId, tools) {
 // ============================================================
 // 简单工具面板（通用：时间查询 / 网页抓取 / 文件操作 / JSON 查询）
 // ============================================================
+function renderTokenCounterPanel(container, comp) {
+    if (comp.toolEnabled === undefined) comp.toolEnabled = true;
+    container.className = 'module-panel';
+    const connected = STATE.connections.some(c =>
+        (c.targetCompId === comp.id || c.sourceCompId === comp.id));
+    const on = comp.toolEnabled !== false;
+    container.innerHTML = `
+        <div class="tool-toggle-row">
+            <span class="tool-status-dot ${on ? 'on' : 'off'}"></span>
+            <span style="font-size:12px;font-weight:600;">${on ? '已开启' : '已关闭'}</span>
+            <button class="tool-toggle-btn ${on ? 'on' : 'off'}" id="tctog-${comp.id}">${on ? '关闭' : '开启'}</button>
+        </div>
+        <div style="text-align:center;color:var(--text-muted);padding:16px 10px;">
+            <div style="font-size:22px;">🧮</div>
+            <div style="font-size:12px;margin-top:6px;color:${connected ? 'var(--success,#52c41a)' : 'var(--text-muted)'};">
+                ${connected ? '已连接 LLM ✅' : '未连接 LLM'}
+            </div>
+            <div style="font-size:10px;margin-top:4px;">连接 LLM 后，对话页输入框上方显示本次对话 Token 用量</div>
+        </div>
+    `;
+    const togBtn = container.querySelector(`#tctog-${comp.id}`);
+    const dot = container.querySelector('.tool-status-dot');
+    togBtn.addEventListener('click', () => {
+        comp.toolEnabled = !on;
+        togBtn.textContent = comp.toolEnabled === false ? '开启' : '关闭';
+        togBtn.className = `tool-toggle-btn ${comp.toolEnabled === false ? 'off' : 'on'}`;
+        dot.className = `tool-status-dot ${comp.toolEnabled === false ? 'off' : 'on'}`;
+        autoSaveConnections();
+    });
+}
+
 function renderSimpleToolPanel(toolName, desc) {
     return function(container, comp) {
         if (comp.toolEnabled === undefined) comp.toolEnabled = true;

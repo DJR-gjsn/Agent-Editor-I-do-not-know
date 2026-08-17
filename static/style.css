@@ -3049,6 +3049,22 @@ select { background: var(--bg-input); color: var(--text-primary); border-color: 
 
 .settings-body { padding: 16px; flex: 1; overflow-y: auto; }
 
+/* Token 用量行（连接 Token 计数器组件后显示在输入栏上方） */
+.chat-token-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 12px; margin: 0 12px 4px;
+    background: var(--bg-input, rgba(255,255,255,0.05));
+    border: 1px solid var(--border, rgba(255,255,255,0.1));
+    border-radius: var(--radius-sm, 6px);
+    font-size: 11px; color: var(--text-muted);
+}
+.chat-token-bar .token-bar-label { font-weight: 600; color: var(--text-primary); }
+.chat-token-bar .token-bar-value {
+    font-family: var(--font-mono, monospace);
+    color: var(--primary, #4A90D9); font-weight: 700;
+}
+.chat-token-bar .token-bar-hint { margin-left: auto; opacity: 0.7; }
+
 /* 滑块设置行 */
 .settings-slider-row {
     display: flex; align-items: center; gap: 10px;

@@ -21,6 +21,7 @@ const chatState = {
     skillTools: {},       // { skillId: [toolNames] }
     skillComponents: {},  // { skillId: [{type, name, tools}] }
     smartMode: false,     // 智能模式：LLM 自主选择技能
+    tokenCounter: false,  // Token 计数器：编辑器连接后对话页显示用量
 };
 
 // ============================================================
@@ -281,6 +282,7 @@ async function init() {
     }
     loadHistory();
     await loadSkills();
+    updateTokenBar();
     bindEvents();
 }
 
@@ -297,6 +299,7 @@ function loadActiveConfig() {
         if (cfg.apiKey) chatState.apiKey = cfg.apiKey;
         if (cfg.model) chatState.model = cfg.model;
         if (cfg.tool_names) chatState.toolNames = cfg.tool_names;
+        if (cfg.tokenCounter) chatState.tokenCounter = true;
         chatState.fromBackend = true;
 
         const toolInfo = chatState.toolNames.length > 0 ? ` · ${chatState.toolNames.length} tools` : '';
@@ -320,6 +323,21 @@ async function loadConfig() {
         }
         modelBadge.textContent = '模型: 未连接（使用默认）';
     }
+}
+
+/** 更新 Token 用量行（编辑器连接 Token 计数器组件后显示） */
+function updateTokenBar() {
+    const bar = document.getElementById('chat-token-bar');
+    const countEl = document.getElementById('chat-token-count');
+    if (!bar || !countEl) return;
+    if (!chatState.tokenCounter) {
+        bar.style.display = 'none';
+        return;
+    }
+    bar.style.display = '';
+    const { tokens } = MemoryPanel.calcTokens(chatState.messages);
+    const maxK = Math.round(MemoryPanel.MAX_CHARS / MemoryPanel.CHARS_PER_TOKEN / 1000);
+    countEl.textContent = `${formatTokens(tokens)} / ~${maxK}K`;
 }
 
 function bindEvents() {
@@ -610,6 +628,7 @@ async function sendMessage() {
     setInputDisabled(false);
     chatInput.focus();
     saveHistory();
+    updateTokenBar();
     // 检查是否需要自动总结
     checkAutoSummarize();
     // 刷新文件列表（可能有工具生成了新文件）
@@ -703,6 +722,7 @@ function clearHistory() {
     showEmpty();
     safeStorage.remove(getHistoryKey());
     updateMemoryPanel();
+    updateTokenBar();
 
     // 同步清空后端项目记忆
     const pid = chatState.projectId || 'default';
