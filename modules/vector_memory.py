@@ -5,6 +5,7 @@ embeddings_search: 语义搜索，余弦相似度匹配 top-K
 """
 import json
 import math
+import os
 import threading
 import time
 
@@ -16,19 +17,106 @@ from .config import get_config
 from .utils import get_request_api_config
 
 # ============================================================
-# 向量存储（线程安全）
+# 向量存储（线程安全 + 落盘持久化）
 # ============================================================
 _lock = threading.RLock()
 _store = []  # [{"id": str, "text": str, "embedding": list[float], "created_at": str}]
 _next_id = 0
 
+# 存储路径覆盖（init_vector_store 设置；测试/多实例用）。None 时回退到
+# 环境变量 VECTOR_STORE_PATH，再回退到默认 data/vector_store/vector_store.json
+_STORE_PATH_OVERRIDE = None
+
+# 默认存储文件：项目根/data/vector_store/vector_store.json
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_DEFAULT_STORE_PATH = os.path.join(_PROJECT_ROOT, "data", "vector_store", "vector_store.json")
+
+
+def _store_path() -> str:
+    """当前向量库存储文件路径（override > 环境变量 > 默认）"""
+    if _STORE_PATH_OVERRIDE:
+        return _STORE_PATH_OVERRIDE
+    env = os.environ.get("VECTOR_STORE_PATH")
+    if env:
+        return env
+    return _DEFAULT_STORE_PATH
+
+
+def _save_to_disk():
+    """将内存向量库原子写入磁盘（tmp + os.replace，避免写一半损坏）"""
+    with _lock:
+        data = {"version": 1, "next_id": _next_id, "documents": _store}
+        path = _store_path()
+        tmp = f"{path}.tmp"
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False)
+            os.replace(tmp, path)
+        except OSError:
+            # 落盘失败不阻塞主流程（向量库仍在内存中可用）
+            try:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            except OSError:
+                pass
+
+
+def _load_from_disk():
+    """从磁盘加载向量库（幂等）。文件缺失/损坏时以空库启动，不崩溃。"""
+    global _store, _next_id
+    path = _store_path()
+    with _lock:
+        _store = []
+        _next_id = 0
+        if not os.path.exists(path):
+            return
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            return  # 损坏文件：空库启动
+        docs = data.get("documents", []) if isinstance(data, dict) else []
+        valid = [
+            d for d in docs
+            if isinstance(d, dict) and d.get("id") and d.get("text") is not None
+            and isinstance(d.get("embedding"), list)
+        ]
+        _store = valid
+        # 恢复 next_id：取 文件记录的 next_id、已有 id 最大值+1、文档数 三者的最大值，
+        # 保证新文档 id 不会与旧文档重叠
+        max_id = -1
+        for d in _store:
+            iid = str(d["id"])
+            if iid.startswith("vec_"):
+                try:
+                    max_id = max(max_id, int(iid[4:]))
+                except ValueError:
+                    pass
+        nid = data.get("next_id", 0) if isinstance(data, dict) else 0
+        if not isinstance(nid, int) or nid < 0:
+            nid = 0
+        _next_id = max(nid, max_id + 1, len(_store))
+
+
+def init_vector_store(path=None):
+    """重定向向量库存储路径并重新从盘加载。
+
+    - 传路径：后续读写都落到该文件（测试/多实例隔离）
+    - 传 None：回到默认路径（环境变量或项目默认位置）
+    """
+    global _STORE_PATH_OVERRIDE
+    _STORE_PATH_OVERRIDE = path
+    _load_from_disk()
+
 
 def _clear_store():
-    """清空向量库"""
+    """清空向量库（内存 + 磁盘）"""
     global _store, _next_id
     with _lock:
         _store = []
         _next_id = 0
+    _save_to_disk()
 
 
 def _get_stats() -> dict:
@@ -51,6 +139,10 @@ def _get_embedding(text: str, api_base: str = None, api_key: str = None) -> list
     req_cfg = get_request_api_config()
     base = api_base or req_cfg.get("api_base") or cfg["api_base"]
     key = api_key or req_cfg.get("api_key") or cfg["api_key"]
+
+    # 未配置有效 key（空或默认占位符）时直接本地向量化，避免无谓的网络等待
+    if not key or "your-api-key" in key:
+        return _tfidf_embed(text)
 
     # 尝试 API embeddings（仅首次，失败后跳过）
     global _api_available
@@ -214,6 +306,7 @@ def _exec_index(args: dict) -> str:
             "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         })
         total = len(_store)
+    _save_to_disk()  # 持久化：写入磁盘，重启后不丢失
 
     preview = text[:100] + ("..." if len(text) > 100 else "")
     return f"✅ 已添加到向量知识库 (ID: {doc_id})\n当前共 {total} 条文档\n内容: {preview}"
@@ -280,11 +373,6 @@ def register_routes(app, http_session=None):
             text = (data.get("text") or "").strip()
             if not text:
                 return jsonify({"success": False, "error": "text 不能为空"})
-            # 支持传入 API 配置覆盖
-            if data.get("api_base"):
-                _api_base_override = data["api_base"]
-            if data.get("api_key"):
-                _api_key_override = data["api_key"]
             result = _exec_index({"text": text})
             return jsonify({"success": True, "result": result})
         # GET：列出向量库中的所有文档（不含向量数据）
@@ -371,3 +459,9 @@ def register_routes(app, http_session=None):
     @app.route("/api/vector-memory/stats", methods=["GET"])
     def vm_stats():
         return jsonify({"success": True, "stats": _get_stats()})
+
+
+# ============================================================
+# 启动时从磁盘加载（持久化数据恢复）
+# ============================================================
+_load_from_disk()

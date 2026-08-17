@@ -1,16 +1,20 @@
-# ── Python ─────────────────────────────────────────
+# ─── Python ─────────────────────────────
 __pycache__/
 *.py[cod]
 *.egg-info/
 build/
 dist/
 
-# 虚拟环境与 IDE
+# 虚拟环境 / IDE
 .venv/
 venv/
 env/
 .idea/
 .vscode/
+
+# 本地工具配置（可能含个人权限/密钥）
+.claude/
+.superpowers/
 
 # 测试与构建产物
 *.xlsx
@@ -21,21 +25,18 @@ report_summary.txt
 *_detailed.json
 /test_project_connections.json
 
-# 本地工具配置（可能含个人权限/密钥）
-.claude/
-
 # 备份文件
 *.bak
 
-# SDD 工作区（任务简报/报告/审查包/进度账本）
-.superpowers/
-
-# 运行时数据（对话记忆、存储配置、调试文件）
+# 运行时的数据（对话记忆、存储配置、调试文件）
 data/memories/
 data/storage_config.json
 baidu_debug.json
 
-# 用户项目数据（含个人对话内容，不推送到公开仓库）
+# 向量知识库持久化数据（可能含用户资料，不推送公开仓库）
+data/vector_store/
+
+# 用户项目数据（含个人对话内容，不推送公开仓库）
 data/projects/*.json
 
 # 本地会话记录（不发布）
@@ -45,8 +46,8 @@ SESSION_SUMMARY.md
 Thumbs.db
 Desktop.ini
 
-# ── 例外：docs/ 下的文档表格随仓库发布 ──
+# ─── 例外：docs/ 下的文档表格随仓库发布 ───
 !docs/*.xlsx
 
-# ��Ŀ�򱨣����ؽ����ã���������
+# 项目简报（本地交接用，不发布）
 PROJECT_BRIEF.md
