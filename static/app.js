@@ -810,6 +810,7 @@ function setupSettingsPanel() {
     // 打开设置
     btnSettings.addEventListener('click', () => {
         overlay.style.display = 'flex';
+        renderMcpServers(); // 打开设置时刷新 MCP server 列表
         // 同步当前选中状态
         const current = document.documentElement.getAttribute('data-theme') || 'industrial';
         applyTheme(current);
@@ -848,6 +849,97 @@ function setupSettingsPanel() {
             applyLineHeight(parseFloat(lineHeightSlider.value));
         });
     }
+}
+
+// ============ MCP Server 管理 ============
+async function fetchJson(url, options) {
+    const resp = await fetch(url, options);
+    return resp.json();
+}
+
+async function loadMcpServers() {
+    const data = await fetchJson('/api/mcp/servers');
+    return data.servers || [];
+}
+
+function mcpStatusBadge(s) {
+    if (!s.enabled) return '<span style="color:#999;">已停用</span>';
+    if (s.connected) return '<span style="color:#52c41a;">已连接</span>';
+    return `<span style="color:#f5222d;" title="${escapeHtml(s.error || '')}">错误</span>`;
+}
+
+async function renderMcpServers() {
+    const box = document.getElementById('mcp-server-list');
+    if (!box) return;
+    const servers = await loadMcpServers();
+    if (!servers.length) {
+        box.innerHTML = '<div style="color:#999;padding:6px 0;">尚未配置 MCP server。添加后即可在画布中使用"外部 MCP 工具"组件。</div>';
+        return;
+    }
+    box.innerHTML = servers.map(s => `
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;">
+            <span style="flex:1;">${escapeHtml(s.name)} <span style="color:#999;">(${s.type}, ${s.tool_count} 工具)</span></span>
+            ${mcpStatusBadge(s)}
+            <button class="module-btn secondary" data-mcp-test="${s.id}" style="font-size:12px;padding:4px 8px;">测试</button>
+            <button class="module-btn secondary" data-mcp-edit="${s.id}" style="font-size:12px;padding:4px 8px;">编辑</button>
+            <button class="module-btn secondary" data-mcp-del="${s.id}" style="font-size:12px;padding:4px 8px;color:#f5222d;">删除</button>
+        </div>`).join('');
+    box.querySelectorAll('[data-mcp-test]').forEach(b => b.onclick = () => testMcpServer(b.dataset.mcpTest));
+    box.querySelectorAll('[data-mcp-edit]').forEach(b => b.onclick = () => openMcpEditor(b.dataset.mcpEdit));
+    box.querySelectorAll('[data-mcp-del]').forEach(b => b.onclick = () => deleteMcpServer(b.dataset.mcpDel));
+}
+
+function openMcpEditor(serverId) {
+    const existing = (serverId && document.querySelector(`[data-mcp-editor="${serverId}"]`));
+    // 简单实现：prompt 表单（与项目设置面板轻量风格一致）
+    const servers = window.__mcpServers || [];
+    const s = serverId ? servers.find(x => x.id === serverId) : null;
+    const defaults = s ? s : { id: '', name: '', type: 'stdio', command: 'npx', args: '', enabled: true };
+    const id = prompt('server id（字母数字-_，≤32，不可重复）', defaults.id || '');
+    if (id === null) return;
+    const name = prompt('显示名称', defaults.name || '');
+    if (name === null) return;
+    const type = prompt('类型（stdio / http）', defaults.type || 'stdio');
+    if (type === null) return;
+    let cfg = { id, name, type, enabled: true };
+    if (type === 'stdio') {
+        const cmd = prompt('命令（如 npx）', defaults.command || 'npx');
+        if (cmd === null) return;
+        const args = prompt('参数，空格分隔（如 -y @modelcontextprotocol/server-git）', (defaults.args || []).join(' ') || '');
+        if (args === null) return;
+        cfg.command = cmd;
+        cfg.args = args.trim() ? args.trim().split(/\s+/) : [];
+    } else {
+        const url = prompt('HTTP URL', defaults.url || '');
+        if (url === null) return;
+        cfg.url = url;
+        const token = prompt('可选 token（仅存本地）', defaults.token || '');
+        if (token === null) return;
+        if (token) cfg.token = token;
+    }
+    const opts = { method: serverId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) };
+    fetchJson(serverId ? `/api/mcp/servers/${serverId}` : '/api/mcp/servers', opts).then(r => {
+        if (!r.success) { alert('保存失败: ' + (r.error || '未知错误')); return; }
+        renderMcpServers();
+    });
+}
+
+async function deleteMcpServer(id) {
+    if (!confirm(`确定删除 MCP server '${id}'？其工具将从画布中移除。`)) return;
+    const r = await fetchJson(`/api/mcp/servers/${id}`, { method: 'DELETE' });
+    if (!r.success) { alert('删除失败: ' + (r.error || '')); return; }
+    renderMcpServers();
+}
+
+async function testMcpServer(id) {
+    const servers = await loadMcpServers();
+    const s = servers.find(x => x.id === id);
+    if (!s) return;
+    const cfg = { id: s.id, name: s.name, type: s.type, enabled: true };
+    if (s.type === 'stdio') { cfg.command = s.command; cfg.args = s.args || []; }
+    else { cfg.url = s.url; if (s.token) cfg.token = s.token; }
+    const r = await fetchJson(`/api/mcp/servers/${id}/test`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) });
+    alert(r.success ? `连接成功，共 ${r.tool_count} 个工具` : '连接失败: ' + (r.error || ''));
 }
 
 // ============================================================
