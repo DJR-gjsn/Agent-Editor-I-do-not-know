@@ -1290,6 +1290,7 @@ function setupPalletTooltips() {
         mcp_pdf: '#cf1322',
         mcp_finance: '#08979c',
         mcp_navigation: '#0050b3',
+        mcp_external: '#389e0d',
         skill_document: '#2b5797',
         skill_frontend:  '#ec4899',
         skill_uiux:      '#8b5cf6',
@@ -1324,7 +1325,9 @@ function setupPalletTooltips() {
             // 获取该组件包含的工具
             const compTools = TOOL_NAME_MAP[type] || [];
             let toolsHTML = '';
-            if (compTools.length > 0) {
+            if (type === 'mcp_external') {
+                toolsHTML = '<div class="pallet-tooltip-tools">🔌 连接外部 MCP server，工具动态可用</div>';
+            } else if (compTools.length > 0) {
                 toolsHTML = `<div class="pallet-tooltip-tools">🔧 ${compTools.map(t => `<code>${escapeHtml(t)}</code>`).join(' ')}</div>`;
             }
 
