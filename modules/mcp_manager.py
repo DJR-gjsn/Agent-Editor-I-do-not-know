@@ -297,8 +297,12 @@ def register_routes(app):
 
     @app.route("/api/mcp/servers/<server_id>/test", methods=["POST"])
     def mcp_test(server_id):
-        cfg = request.get_json(force=True, silent=True) or {}
-        cfg["id"] = cfg.get("id", server_id)
+        with _lock:
+            entry = _servers.get(server_id)
+            base_cfg = dict(entry["config"]) if entry else {}
+        cfg = dict(base_cfg)
+        cfg.update(request.get_json(force=True, silent=True) or {})
+        cfg["id"] = server_id
         return jsonify(test_server(cfg))
 
     @app.route("/api/mcp/servers/<server_id>/tools", methods=["GET"])

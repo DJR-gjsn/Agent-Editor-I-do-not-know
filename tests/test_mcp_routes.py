@@ -83,6 +83,14 @@ class TestMcpRoutes(unittest.TestCase):
         # test 不注册
         self.assertEqual(mcp_manager.get_status(), [])
 
+    def test_test_endpoint_uses_saved_config(self):
+        # 先创建（body 含 command），test 用空 body 也应成功（合并已存配置）
+        self.client.post("/api/mcp/servers", json=self._stdio_body("sv"))
+        r = self.client.post("/api/mcp/servers/sv/test", json={})
+        body = r.get_json()
+        self.assertTrue(body["success"], body)
+        self.assertEqual(body["tool_count"], 3)
+
     def test_tools_endpoint(self):
         self.client.post("/api/mcp/servers", json=self._stdio_body("tk"))
         r = self.client.get("/api/mcp/servers/tk/tools")

@@ -810,7 +810,7 @@ function setupSettingsPanel() {
     // 打开设置
     btnSettings.addEventListener('click', () => {
         overlay.style.display = 'flex';
-        renderMcpServers(); // 打开设置时刷新 MCP server 列表
+        renderMcpServers().catch(() => { const box = document.getElementById('mcp-server-list'); if (box) box.innerHTML = '<div style="color:#f5222d;padding:6px 0;">加载 MCP 配置失败</div>'; }); // 打开设置时刷新 MCP server 列表
         // 同步当前选中状态
         const current = document.documentElement.getAttribute('data-theme') || 'industrial';
         applyTheme(current);
@@ -918,7 +918,7 @@ function openMcpEditor(serverId) {
         const url = prompt('HTTP URL', defaults.url || '');
         if (url === null) return;
         cfg.url = url;
-        const token = prompt('可选 token（仅存本地）', defaults.token || '');
+        const token = prompt('可选 token（存后端全局配置，不回显）', defaults.token || '');
         if (token === null) return;
         if (token) cfg.token = token;
     }
@@ -937,13 +937,8 @@ async function deleteMcpServer(id) {
 }
 
 async function testMcpServer(id) {
-    const servers = await loadMcpServers();
-    const s = servers.find(x => x.id === id);
-    if (!s) return;
-    const cfg = { id: s.id, name: s.name, type: s.type, enabled: true };
-    if (s.type === 'stdio') { cfg.command = s.command; cfg.args = s.args || []; }
-    else { cfg.url = s.url; if (s.token) cfg.token = s.token; }
-    const r = await fetchJson(`/api/mcp/servers/${id}/test`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) });
+    const r = await fetchJson(`/api/mcp/servers/${id}/test`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    if (r.success) renderMcpServers();
     alert(r.success ? `连接成功，共 ${r.tool_count} 个工具` : '连接失败: ' + (r.error || ''));
 }
 
