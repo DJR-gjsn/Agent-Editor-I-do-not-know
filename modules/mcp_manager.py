@@ -307,3 +307,7 @@ def register_routes(app):
         if not any(s["id"] == server_id for s in get_status()):
             return jsonify({"success": False, "error": "server 不存在"})
         return jsonify({"success": True, "tools": tools})
+
+
+# 启动时同步（连接 enabled server 并注册工具；失败不阻塞启动）
+init_mcp_manager()

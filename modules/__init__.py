@@ -37,6 +37,8 @@ def register_all(app):
     from . import memory_summarizer
     # 向量记忆（语义搜索）
     from . import vector_memory
+    # 外部 MCP 工具
+    from . import mcp_client, mcp_manager
 
     system_prompt.register_routes(app)
     function_calling.register_routes(app)
@@ -77,3 +79,4 @@ def register_all(app):
     memory_module.register_routes(app)
     memory_summarizer.register_routes(app)
     vector_memory.register_routes(app)
+    mcp_manager.register_routes(app)
