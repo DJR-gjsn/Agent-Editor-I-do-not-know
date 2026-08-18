@@ -86,10 +86,21 @@ def _register_tools(server_id, tools, client):
     return registered
 
 
+def _safe_close(client):
+    """关闭 client（close 失败不阻塞注销/同步流程）"""
+    if client is None:
+        return
+    try:
+        client.close()
+    except Exception:
+        pass
+
+
 def _unregister_tools(server_id):
     entry = _servers.get(server_id)
     for full in (entry or {}).get("registered", []):
         tool_registry.unregister(full)
+    _safe_close((entry or {}).get("client"))
 
 
 def _sync_one(cfg):
@@ -103,6 +114,7 @@ def _sync_one(cfg):
     if not cfg.get("enabled", True):
         _servers[server_id] = entry
         return entry
+    client = None
     try:
         client = _build_client(cfg)
         client.initialize()
@@ -112,6 +124,7 @@ def _sync_one(cfg):
                      registered=registered)
     except MCPError as e:
         entry["error"] = str(e)
+        _safe_close(client)
     _servers[server_id] = entry
     return entry
 

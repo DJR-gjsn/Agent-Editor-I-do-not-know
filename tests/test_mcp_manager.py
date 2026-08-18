@@ -81,6 +81,13 @@ class TestMcpManager(unittest.TestCase):
         self.assertEqual(tool_registry.get_definitions_by_names(
             ["mcp_ext_rm_echo"]), [])
 
+    def test_remove_closes_client_process(self):
+        mcp_manager.add_server(_stdio_cfg("cl"))
+        client = mcp_manager._servers["cl"]["client"]
+        proc = client._transport._proc
+        mcp_manager.remove_server("cl")
+        self.assertIsNotNone(proc.poll(), "删除后 stdio 子进程应被终止")
+
     def test_disabled_server_not_connected(self):
         r = mcp_manager.add_server(_stdio_cfg("off", enabled=False))
         self.assertTrue(r["success"])
