@@ -58,21 +58,31 @@ STOCK_DEF = {
 # ============================================================
 # 货币转换
 # ============================================================
+def _fetch_rates_from_web() -> dict:
+    """从网络获取汇率（多源依次尝试，单源 6s 超时）"""
+    for url in _RATE_SOURCES:
+        try:
+            resp = _requests.get(url, timeout=6)
+            if resp.status_code == 200:
+                data = resp.json()
+                rates = data.get("rates")
+                if rates:
+                    return rates
+        except Exception:
+            continue
+    return {}
+
+
 def _get_rates() -> dict:
     """获取汇率（缓存 1 小时）"""
     now = time.time()
     if _cache["rates"] and now - _cache["rates_time"] < 3600:
         return _cache["rates"]
 
-    try:
-        # 免费 API，无需 Key
-        resp = _requests.get("https://api.exchangerate-api.com/v4/latest/USD", timeout=8)
-        data = resp.json()
-        _cache["rates"] = data.get("rates", {})
+    _cache["rates"] = _fetch_rates_from_web()
+    if _cache["rates"]:
         _cache["rates_time"] = now
-        return _cache["rates"]
-    except Exception:
-        return _cache["rates"] or {}
+    return _cache["rates"]
 
 
 def _exec_currency(args: dict) -> str:
@@ -124,28 +134,42 @@ def _exec_stock(args: dict) -> str:
     return f"❌ 未找到 '{symbol}' 的价格数据。\n请检查代码是否正确（如 AAPL、TSLA、BTC、ETH）。"
 
 
-def _get_yahoo_price(symbol: str) -> str | None:
-    """通过 yfinance 获取价格"""
-    try:
-        import yfinance as yf
-        ticker = yf.Ticker(symbol)
-        info = ticker.info
-        if not info or "regularMarketPrice" not in info:
-            return None
+_RATE_SOURCES = [
+    "https://api.exchangerate-api.com/v4/latest/USD",
+    "https://open.er-api.com/v6/latest/USD",
+]
 
-        price = info.get("regularMarketPrice", 0)
-        prev_close = info.get("previousClose", price)
+_YAHOO_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+}
+
+
+def _get_yahoo_price(symbol: str) -> str | None:
+    """通过 Yahoo Finance chart API 获取价格（requests 直调，带 8s 超时）"""
+    try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+        resp = _requests.get(
+            url, params={"interval": "1d", "range": "1d"},
+            headers=_YAHOO_HEADERS, timeout=8,
+        )
+        if resp.status_code != 200:
+            return None
+        result = resp.json().get("chart", {}).get("result")
+        if not result:
+            return None
+        meta = result[0].get("meta", {})
+        price = meta.get("regularMarketPrice")
+        if price is None:
+            return None
+        prev_close = meta.get("chartPreviousClose") or meta.get("previousClose") or price
         change = price - prev_close
         pct = (change / prev_close * 100) if prev_close else 0
-        name = info.get("shortName", info.get("longName", symbol))
-
+        name = meta.get("shortName") or meta.get("longName") or symbol
+        currency = meta.get("currency", "USD")
         arrow = "📈" if change > 0 else "📉" if change < 0 else "➡️"
-        return f"{arrow} {name} ({symbol})\n💵 价格: ${price:.2f}\n📊 涨跌: {change:+.2f} ({pct:+.2f}%)"
-    except ImportError:
-        pass
+        return f"{arrow} {name} ({symbol})\n💵 价格: {price:,.2f} {currency}\n📊 涨跌: {change:+.2f} ({pct:+.2f}%)"
     except Exception:
-        pass
-    return None
+        return None
 
 
 def _get_coingecko_price(coin_id: str, symbol: str) -> str | None:
@@ -184,33 +208,48 @@ for tool_def, executor in _tool_list:
 def register_routes(app, http_session=None):
     @app.route("/api/finance/test-connection", methods=["POST"])
     def finance_test_connection():
-        """测试金融数据服务可用性"""
-        results = {}
+        """测试金融数据服务可用性（并行探测，2s 超时，快速失败不悬挂）"""
+        from concurrent.futures import ThreadPoolExecutor
 
-        # 测试汇率 API
-        try:
-            resp = _requests.get("https://api.exchangerate-api.com/v4/latest/USD", timeout=5)
-            if resp.status_code == 200:
-                rates = resp.json().get("rates", {})
-                results["exchange_rate"] = f"可用 ({len(rates)} 种货币)"
-            else:
-                results["exchange_rate"] = f"不可用 (HTTP {resp.status_code})"
-        except Exception as e:
-            results["exchange_rate"] = f"不可用 ({e})"
+        def _probe_rates():
+            for url in _RATE_SOURCES:
+                try:
+                    resp = _requests.get(url, timeout=2)
+                    if resp.status_code == 200:
+                        rates = resp.json().get("rates", {})
+                        if rates:
+                            return f"可用 ({len(rates)} 种货币)"
+                except Exception:
+                    continue
+            return "不可用（网络无法访问免费汇率 API，请检查网络或代理）"
 
-        # 测试 yfinance
-        try:
-            import yfinance
-            results["yfinance"] = "可用"
-        except ImportError:
-            results["yfinance"] = "未安装 (pip install yfinance)"
+        def _probe_yahoo():
+            try:
+                resp = _requests.get(
+                    "https://query1.finance.yahoo.com/v8/finance/chart/AAPL",
+                    params={"interval": "1d", "range": "1d"},
+                    headers=_YAHOO_HEADERS, timeout=2,
+                )
+                return "可用" if resp.status_code == 200 else f"不可用 (HTTP {resp.status_code})"
+            except Exception as e:
+                return f"不可用 ({str(e)[:40]})"
 
-        # 测试 CoinGecko
-        try:
-            resp = _requests.get("https://api.coingecko.com/api/v3/ping", timeout=5)
-            results["coingecko"] = "可用" if resp.status_code == 200 else "不可用"
-        except Exception:
-            results["coingecko"] = "不可用"
+        def _probe_coingecko():
+            try:
+                resp = _requests.get("https://api.coingecko.com/api/v3/ping", timeout=2)
+                return "可用" if resp.status_code == 200 else "不可用"
+            except Exception:
+                return "不可用"
+
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            f_rates = pool.submit(_probe_rates)
+            f_yahoo = pool.submit(_probe_yahoo)
+            f_cg = pool.submit(_probe_coingecko)
+            results = {
+                "exchange_rate": f_rates.result(timeout=10),
+                "yahoo": f_yahoo.result(timeout=10),
+                "coingecko": f_cg.result(timeout=10),
+            }
 
         return jsonify({
             "success": any("可用" in v for v in results.values()),
