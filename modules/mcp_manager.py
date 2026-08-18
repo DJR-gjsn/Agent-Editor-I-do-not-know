@@ -122,7 +122,7 @@ def _sync_one(cfg):
         registered = _register_tools(server_id, tools, client)
         entry.update(client=client, tools=tools, connected=True,
                      registered=registered)
-    except MCPError as e:
+    except Exception as e:
         entry["error"] = str(e)
         _safe_close(client)
     _servers[server_id] = entry
