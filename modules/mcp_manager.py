@@ -68,22 +68,43 @@ def _make_handler(client, tool_name):
     return handler
 
 
+_TOOL_NAME_RE = re.compile(r"[^a-zA-Z0-9_-]")
+_MAX_TOOL_FULL_LEN = 64
+
+
 def _register_tools(server_id, tools, client):
     registered = []
-    for t in tools:
-        name = t.get("name")
-        if not name:
-            continue
-        full = f"{TOOL_PREFIX}{server_id}_{name}"
-        definition = {
-            "name": full,
-            "description": t.get("description", ""),
-            "parameters": t.get("inputSchema",
-                                {"type": "object", "properties": {}}),
-        }
-        tool_registry.register(full, definition, _make_handler(client, name))
-        registered.append(full)
-    return registered
+    try:
+        for t in tools:
+            # 防御：非 dict / 名字非字符串 / 空名 → 跳过，不抛异常
+            if not isinstance(t, dict) or not isinstance(t.get("name"), str):
+                continue
+            name = t["name"].strip()
+            if not name:
+                continue
+            # 工具名清洗：非法字符替换为下划线，避免破坏注册全名
+            clean = _TOOL_NAME_RE.sub("_", name)
+            full = f"{TOOL_PREFIX}{server_id}_{clean}"
+            if len(full) > _MAX_TOOL_FULL_LEN:
+                continue  # 超长全名跳过（截断会导致语义混乱），不注册
+            # 占用检查：同名工具已存在则不覆盖（避免撞名静默覆盖/注销误删对方）
+            if any(d["function"]["name"] == full
+                   for d in tool_registry.get_all_definitions()):
+                continue
+            definition = {
+                "name": full,
+                "description": t.get("description", ""),
+                "parameters": t.get("inputSchema",
+                                    {"type": "object", "properties": {}}),
+            }
+            tool_registry.register(full, definition, _make_handler(client, name))
+            registered.append(full)
+        return registered
+    except Exception:
+        # 部分注册回滚：中途异常时注销已注册的工具，避免 registry 残留陈旧条目
+        for full in registered:
+            tool_registry.unregister(full)
+        raise
 
 
 def _safe_close(client):

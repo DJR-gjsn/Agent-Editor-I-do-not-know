@@ -25,6 +25,7 @@ class StdioTransport:
         self._args = list(args or [])
         self._timeout = timeout
         self._proc = None
+        self._threads = []
         self._out_q = queue.Queue()
         self._err_lines = []
         self._started = False
@@ -43,24 +44,33 @@ class StdioTransport:
         except OSError as e:
             raise MCPError(f"无法启动 MCP server 进程 '{self._cmd}': {e}") from e
         self._started = True
-        threading.Thread(target=self._read_stdout, daemon=True).start()
-        threading.Thread(target=self._read_stderr, daemon=True).start()
+        t1 = threading.Thread(target=self._read_stdout, daemon=True)
+        t2 = threading.Thread(target=self._read_stderr, daemon=True)
+        self._threads = [t1, t2]
+        t1.start()
+        t2.start()
 
     def _read_stdout(self):
-        for line in self._proc.stdout:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                self._out_q.put(("msg", json.loads(line)))
-            except json.JSONDecodeError:
-                pass  # 忽略启动横幅等非 JSON 输出
+        try:
+            for line in self._proc.stdout:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    self._out_q.put(("msg", json.loads(line)))
+                except json.JSONDecodeError:
+                    pass  # 忽略启动横幅等非 JSON 输出
+        except (ValueError, OSError):
+            pass  # 管道被关闭时静默退出，避免线程永久阻塞在 EOF
 
     def _read_stderr(self):
-        for line in self._proc.stderr:
-            self._err_lines.append(line.rstrip())
-            if len(self._err_lines) > 200:
-                self._err_lines.pop(0)
+        try:
+            for line in self._proc.stderr:
+                self._err_lines.append(line.rstrip())
+                if len(self._err_lines) > 200:
+                    self._err_lines.pop(0)
+        except (ValueError, OSError):
+            pass  # 管道被关闭时静默退出
 
     def _write(self, payload):
         if self._proc.poll() is not None:
@@ -100,17 +110,29 @@ class StdioTransport:
 
     def close(self):
         if not self._started or self._proc is None:
-            return
-        if self._proc.poll() is None:
+            return  # 幂等：已关闭（_proc 已置 None）或从未启动
+        proc = self._proc
+        if proc.poll() is None:
             try:
-                self._proc.stdin.close()
+                proc.stdin.close()
             except Exception:
                 pass
-            self._proc.terminate()
+            proc.terminate()
             try:
-                self._proc.wait(timeout=3)
+                proc.wait(timeout=3)
             except subprocess.TimeoutExpired:
-                self._proc.kill()
+                proc.kill()
+        # 关闭管道文件对象，解除读线程对 EOF 的永久阻塞
+        for stream in (proc.stdout, proc.stderr):
+            if stream is not None:
+                try:
+                    stream.close()
+                except Exception:
+                    pass
+        # best-effort join 读线程，回收线程资源
+        for t in self._threads:
+            t.join(timeout=1)
+        self._proc = None  # 释放引用，保证 close 幂等
 
 
 # ============================================================
