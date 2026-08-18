@@ -154,6 +154,16 @@ const TOOL_NAME_MAP = {
     image_tools: ['screenshot', 'image_info', 'image_convert', 'image_resize', 'image_compress'],
 };
 
+// 外部 MCP 工具：把节点保存的工具名拼成注册全名（mcp_ext_<server_id>_<tool>），
+// 供三条工具注入链（buildChatPayload / autoSaveConnections / getComponentToolNames）与
+// collectToolsFromPorts 复用。toolNames 显式子集优先；null（=全部）用 mcpAllTools 快照；
+// serverId 为空（未选 server）返回 []（不注入）。
+function mcpExternalToolNames(comp) {
+    if (!comp || !comp.serverId) return [];
+    const names = comp.toolNames != null ? comp.toolNames : (comp.mcpAllTools || []);
+    return names.map(n => 'mcp_ext_' + comp.serverId + '_' + n);
+}
+
 // 从指定端口收集工具名称
 function collectToolsFromPorts(compId, portIds) {
     const names = [];
@@ -162,9 +172,9 @@ function collectToolsFromPorts(compId, portIds) {
         if (hit && hit.target) {
             let tns = TOOL_NAME_MAP[hit.target.type];
             if (hit.target.type === 'mcp_external') {
-                // 动态 MCP 工具：读节点保存的工具名（null = 全部用 server 工具；
-                // 全部模式时工具名由 renderMcpToolList 快照到 mcpAllTools，此处同步读取）
-                tns = hit.target.toolNames || hit.target.mcpAllTools || null;
+                // 动态 MCP 工具：拼注册全名 mcp_ext_<server_id>_<tool>
+                // （null = 全部用 server 工具；全部模式时工具名由 renderMcpToolList 快照到 mcpAllTools）
+                tns = mcpExternalToolNames(hit.target);
             }
             if (tns) tns.forEach(n => names.push(n));
         }
@@ -2379,7 +2389,7 @@ async function renderMcpToolList(container, comp) {
     const box = container.querySelector(`#mcp-tools-${comp.id}`);
     if (!comp.serverId) { box.innerHTML = '<span style="color:#999;">未选择 server</span>'; comp.mcpAllTools = null; return; }
     const data = await fetchJson(`/api/mcp/servers/${comp.serverId}/tools`).catch(() => null);
-    if (!data || !data.success) { box.innerHTML = '<span style="color:#f5222d;">无法获取工具列表</span>'; return; }
+    if (!data || !data.success) { box.innerHTML = '<span style="color:#f5222d;">无法获取工具列表</span>'; comp.mcpAllTools = null; return; }
     const tools = data.tools || [];
     // mcpAllTools 快照：toolNames 为 null（=全部）时，把该 server 当前工具名同步存入组件字段，
     // 供 collectToolsFromPorts（同步函数、无法 await）读取；server 工具变化时重新渲染会刷新快照
@@ -3147,6 +3157,12 @@ function buildChatPayload(comp) {
                     toolNames.push('nav_route', 'nav_search_place');
                 }
                 break;
+            case 'mcp_external':
+                // 外部 MCP 工具：注入注册全名（mcp_ext_<server_id>_<tool>）
+                if (tgt.toolEnabled !== false) {
+                    mcpExternalToolNames(tgt).forEach(n => { if (!toolNames.includes(n)) toolNames.push(n); });
+                }
+                break;
         }
     });
 
@@ -3193,7 +3209,7 @@ function collectSequentialTools(seqCompId) {
         if (conn) {
             const tgt = STATE.components.find(x => x.id === conn.targetCompId);
             if (tgt) {
-                const names = getComponentToolNames(tgt.type);
+                const names = getComponentToolNames(tgt.type, tgt);
                 names.forEach(n => ordered.push(n));
             }
         }
@@ -3216,7 +3232,7 @@ function collectExecutorToolNames(execCompId) {
         if (conn) {
             const tgt = STATE.components.find(x => x.id === conn.targetCompId);
             if (tgt) {
-                const toolNames = getComponentToolNames(tgt.type);
+                const toolNames = getComponentToolNames(tgt.type, tgt);
                 toolNames.forEach(n => names.push(n));
             }
         }
@@ -3252,7 +3268,7 @@ function collectAgentToolNames(agentCompId) {
         if (conn) {
             const tgt = STATE.components.find(x => x.id === conn.targetCompId);
             if (tgt) {
-                const toolNames = getComponentToolNames(tgt.type);
+                const toolNames = getComponentToolNames(tgt.type, tgt);
                 toolNames.forEach(n => names.push(n));
             }
         }
@@ -3858,7 +3874,7 @@ function updateSequentialTools(comp, container) {
             if (tgt) {
                 const def = COMPONENT_DEFS[tgt.type];
                 // 获取该组件对应的工具名
-                const toolNames = getComponentToolNames(tgt.type);
+                const toolNames = getComponentToolNames(tgt.type, tgt);
                 toolNames.forEach(tn => {
                     ordered.push({ name: tn, label: def ? def.title : tgt.type, compId: tgt.id, portId: portId });
                 });
@@ -3869,7 +3885,8 @@ function updateSequentialTools(comp, container) {
     comp.orderedTools = ordered;
 }
 
-function getComponentToolNames(type) {
+function getComponentToolNames(type, comp) {
+    if (type === 'mcp_external') return mcpExternalToolNames(comp);
     const map = {
         web_search: ['web_search'],
         calculator: ['calculator'],
@@ -4911,7 +4928,7 @@ function refreshExecutorTools(comp) {
             const tgt = STATE.components.find(x => x.id === conn.targetCompId);
             if (tgt) {
                 const def = COMPONENT_DEFS[tgt.type];
-                const toolNames = getComponentToolNames(tgt.type);
+                const toolNames = getComponentToolNames(tgt.type, tgt);
                 toolNames.forEach(tn => {
                     tools.push({ name: tn, label: def ? def.title : tgt.type, compId: tgt.id, portId });
                 });
@@ -5017,7 +5034,7 @@ function renderAgentPanel(container, comp) {
         if (conn) {
             const tgt = STATE.components.find(x => x.id === conn.targetCompId);
             if (tgt) {
-                const names = getComponentToolNames(tgt.type);
+                const names = getComponentToolNames(tgt.type, tgt);
                 names.forEach(n => connectedTools.push(n));
             }
         }
@@ -7216,6 +7233,7 @@ const autoSaveConnections = debounce(() => {
                 if (!tgt) return;
                 const names = TOOL_NAME_MAP[tgt.type];
                 if (names) toolNames.push(...names);
+                if (tgt.type === 'mcp_external') toolNames.push(...mcpExternalToolNames(tgt));
                 if (tgt.type === 'executor' || tgt.type === 'sequential_executor' || tgt.type === 'agent') {
                     let portIds;
                     if (tgt.type === 'executor') {
