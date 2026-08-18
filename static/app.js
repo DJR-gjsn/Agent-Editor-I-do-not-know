@@ -2018,6 +2018,7 @@ function createComponentCard(comp) {
         <span class="card-header-title">${escapeHtml(comp.name || def.title)}</span>
         ${connCount > 0 ? `<span class="card-header-badge" style="background:var(--primary-bg);color:var(--primary);">已连接 ${connCount}</span>` : ''}
         <span class="card-header-badge">w:${comp.size}/12</span>
+        ${comp.type === 'mcp_external' ? '<span class="card-header-badge" style="background:#389e0d;color:#fff;" title="外部 MCP 工具">MCP</span>' : ''}
         <div class="card-header-actions">
             <button class="card-btn btn-resize" title="调整宽度">&harr;</button>
             <button class="card-btn btn-remove" title="移除">&times;</button>
