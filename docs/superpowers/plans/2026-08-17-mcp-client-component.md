@@ -1032,7 +1032,7 @@ Expected: 12 个测试全部 ok
 
 ```bash
 git add tests/test_mcp_manager.py modules/mcp_manager.py
-git commit -m "feat: MCP 配置管理/生命周期/动态注册（12 测试）"
+git commit -m "feat: MCP 配置管理/生命周期/动态注册（11 测试）"
 ```
 
 ---
@@ -1196,7 +1196,7 @@ Expected: 7 个测试全部 ok
 - [ ] **Step 6: 全量回归**
 
 Run: `python -m unittest discover -s tests`
-Expected: 42 + 8 + 12 + 7 = 69 个测试全部 OK
+Expected: 42 + 8 + 11 + 7 = 68 个测试全部 OK
 
 - [ ] **Step 7: 提交**
 
@@ -1495,7 +1495,7 @@ git commit -m "feat: 外部 MCP 工具组件（server 引用 + 工具筛选 + �
 - [ ] **Step 1: 全量回归**
 
 Run: `python -m unittest discover -s tests`
-Expected: 69 个测试全部 OK
+Expected: 68 个测试全部 OK
 
 - [ ] **Step 2: 真实端到端冒烟（fixture 代替 npx，沙箱无 node）**
 
@@ -1520,7 +1520,7 @@ Expected: POST 返回 `success: true, connected: true, tool_count: 3`；列表�
    编辑器"外部 MCP 工具"组件：引用 server + 勾选工具子集
 ```
 
-待办区更新测试数：`测试 69 个（42 旧 + 27 MCP）`。
+待办区更新测试数：`测试 68 个（42 旧 + 26 MCP）`。
 
 - [ ] **Step 4: 提交**
 
