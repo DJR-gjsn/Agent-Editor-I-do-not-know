@@ -30,6 +30,8 @@ class StdioTransport:
         self._started = False
 
     def start(self):
+        if self._started:
+            return  # 幂等：已启动则直接返回，避免双重 start 产生孤儿进程
         try:
             self._proc = subprocess.Popen(
                 [self._cmd] + self._args,
