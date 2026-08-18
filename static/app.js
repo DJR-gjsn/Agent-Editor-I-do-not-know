@@ -1178,6 +1178,7 @@ const COMPONENT_CATEGORIES = {
     mcp_finance:        ['MCP', 'cat-mcp'],
     mcp_geocode:        ['MCP', 'cat-mcp'],
     mcp_navigation:     ['MCP', 'cat-mcp'],
+    mcp_external:       ['MCP', 'cat-mcp'],
 };
 
 function setupPalletBadges() {
