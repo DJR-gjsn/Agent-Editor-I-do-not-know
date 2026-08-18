@@ -80,3 +80,5 @@ def register_all(app):
     memory_summarizer.register_routes(app)
     vector_memory.register_routes(app)
     mcp_manager.register_routes(app)
+    # 启动时同步 enabled server（init 内逐 server try/except，连接失败不阻塞启动）
+    mcp_manager.init_mcp_manager()
