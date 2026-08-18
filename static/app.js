@@ -849,6 +849,10 @@ function setupSettingsPanel() {
             applyLineHeight(parseFloat(lineHeightSlider.value));
         });
     }
+
+    // MCP 添加按钮
+    const btnMcpAdd = document.getElementById('btn-mcp-add');
+    if (btnMcpAdd) btnMcpAdd.addEventListener('click', () => openMcpEditor(null));
 }
 
 // ============ MCP Server 管理 ============
@@ -872,6 +876,7 @@ async function renderMcpServers() {
     const box = document.getElementById('mcp-server-list');
     if (!box) return;
     const servers = await loadMcpServers();
+    window.__mcpServers = servers;
     if (!servers.length) {
         box.innerHTML = '<div style="color:#999;padding:6px 0;">尚未配置 MCP server。添加后即可在画布中使用"外部 MCP 工具"组件。</div>';
         return;
