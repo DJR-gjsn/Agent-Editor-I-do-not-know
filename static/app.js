@@ -160,7 +160,12 @@ function collectToolsFromPorts(compId, portIds) {
     portIds.forEach(pid => {
         const hit = findConnFrom(compId, pid);
         if (hit && hit.target) {
-            const tns = TOOL_NAME_MAP[hit.target.type];
+            let tns = TOOL_NAME_MAP[hit.target.type];
+            if (hit.target.type === 'mcp_external') {
+                // 动态 MCP 工具：读节点保存的工具名（null = 全部用 server 工具；
+                // 全部模式时工具名由 renderMcpToolList 快照到 mcpAllTools，此处同步读取）
+                tns = hit.target.toolNames || hit.target.mcpAllTools || null;
+            }
             if (tns) tns.forEach(n => names.push(n));
         }
     });
@@ -172,6 +177,9 @@ function serializeComponent(c) {
     return {
         id: c.id, type: c.type, size: c.size, x: c.x, y: c.y,
         name: c.name || null,
+        // MCP 外部工具（只存引用，token/命令/URL 都在全局配置）
+        serverId: c.serverId || null,
+        toolNames: c.toolNames || null,
         messages: c.messages,
         // apiKey 不写入布局（安全：避免密钥进入 git 仓库/服务器存储）；
         // 密钥仅保留在组件内存与浏览器 localStorage 的 active-llm-config 中
@@ -208,6 +216,8 @@ function deserializeComponent(cd, fallbackIndex) {
         id: cd.id != null ? cd.id : STATE.nextId++, type: cd.type, size: cd.size,
         x: pos.x, y: pos.y,
         name: cd.name || null,
+        serverId: cd.serverId || null,
+        toolNames: cd.toolNames !== undefined ? cd.toolNames : null,
         messages: cd.messages || [], apiSettings: cd.apiSettings || { apiBase: '', apiKey: '', model: '', provider: '自定义' },
         activePromptId: cd.activePromptId || null, activePromptContent: cd.activePromptContent || null,
         jsonSchema: cd.jsonSchema || null, jsonPrompt: cd.jsonPrompt || null,
@@ -606,6 +616,12 @@ const COMPONENT_DEFS = {
         render: renderSimpleToolPanel('image_info', '截屏 / 图片信息 / 转换 / 缩放 / 压缩'),
         ports: { inputs: [{ id: 'img-in', label: '结果 → LLM' }], outputs: [] },
         description: '图片全套处理：screenshot 截屏、image_info 查看信息、image_convert 格式转换、image_resize 缩放、image_compress 压缩。',
+    },
+    mcp_external: {
+        icon: '\u{1F517}', title: '外部 MCP 工具', color: '#389e0d', defaultSize: 5,
+        render: renderMcpExternalPanel,
+        ports: { inputs: [{ id: 'mcp-ext-in', label: 'LLM 接入' }], outputs: [] },
+        description: '连接设置中配置的 MCP server，将其工具注入 LLM。可勾选要使用的工具子集。',
     },
     // --- MCP 服务 ---
     mcp_weather: {
@@ -2329,6 +2345,58 @@ function renderPropsPanel(compId) {
             });
         }
     }, 50);
+}
+// ============ 外部 MCP 工具组件 ============
+async function renderMcpExternalPanel(container, comp) {
+    if (!comp.serverId) comp.serverId = '';
+    if (!comp.toolNames) comp.toolNames = null; // null = 全部工具
+    const servers = await loadMcpServers().catch(() => []);
+    const enabled = servers.filter(s => s.enabled);
+    const opts = enabled.map(s => `<option value="${escapeHtml(s.id)}" ${comp.serverId === s.id ? 'selected' : ''}>${escapeHtml(s.name)} (${s.tool_count})</option>`).join('') || '<option value="">（请先在设置中配置 server）</option>';
+
+    container.innerHTML = `
+        <div style="padding:12px;">
+            <label style="font-size:13px;color:#666;">MCP Server</label>
+            <select id="mcp-sel-${comp.id}" style="width:100%;padding:6px;margin:6px 0 12px;border:1px solid #d9d9d9;border-radius:4px;">
+                <option value="">（未选择）</option>
+                ${opts}
+            </select>
+            <div id="mcp-tools-${comp.id}" style="max-height:180px;overflow-y:auto;border:1px solid #f0f0f0;border-radius:4px;padding:8px;font-size:13px;">
+                ${comp.serverId ? '加载工具中…' : '选择 server 后显示可用工具'}
+            </div>
+        </div>
+    `;
+    const sel = container.querySelector(`#mcp-sel-${comp.id}`);
+    sel.addEventListener('change', async () => {
+        comp.serverId = sel.value;
+        comp.toolNames = null;
+        await renderMcpToolList(container, comp);
+    });
+    if (comp.serverId) await renderMcpToolList(container, comp);
+}
+
+async function renderMcpToolList(container, comp) {
+    const box = container.querySelector(`#mcp-tools-${comp.id}`);
+    if (!comp.serverId) { box.innerHTML = '<span style="color:#999;">未选择 server</span>'; comp.mcpAllTools = null; return; }
+    const data = await fetchJson(`/api/mcp/servers/${comp.serverId}/tools`).catch(() => null);
+    if (!data || !data.success) { box.innerHTML = '<span style="color:#f5222d;">无法获取工具列表</span>'; return; }
+    const tools = data.tools || [];
+    // mcpAllTools 快照：toolNames 为 null（=全部）时，把该 server 当前工具名同步存入组件字段，
+    // 供 collectToolsFromPorts（同步函数、无法 await）读取；server 工具变化时重新渲染会刷新快照
+    if (comp.toolNames === null) comp.mcpAllTools = tools.map(t => t.name);
+    else comp.mcpAllTools = null;
+    const selected = comp.toolNames; // null = 全部
+    box.innerHTML = tools.map(t => {
+        const checked = selected === null ? 'checked' : (selected.includes(t.name) ? 'checked' : '');
+        return `<label style="display:block;padding:3px 0;"><input type="checkbox" data-tool="${escapeHtml(t.name)}" ${checked}> ${escapeHtml(t.name)}</label>`;
+    }).join('') || '<span style="color:#999;">该 server 没有可用工具</span>';
+    box.querySelectorAll('input[data-tool]').forEach(cb => {
+        cb.addEventListener('change', () => {
+            const all = [...box.querySelectorAll('input[data-tool]')];
+            if (all.every(x => x.checked)) { comp.toolNames = null; return; }
+            comp.toolNames = all.filter(x => x.checked).map(x => x.dataset.tool);
+        });
+    });
 }
 // ============================================================
 // LLM 组件（双 Tab：API 配置 + 对话）
