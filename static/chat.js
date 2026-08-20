@@ -280,6 +280,8 @@ function clearSkillWarning() {
 // ============================================================
 async function init() {
     chatState.projectId = parseProjectFromURL();
+    // 登录后先从后端拉取设置合并到 localStorage（后端优先，loadActiveConfig 之前）
+    await pullSettingsFromBackend();
     loadActiveConfig();
     await loadConfig();
     if (chatState.projectId) {
@@ -313,6 +315,18 @@ function loadActiveConfig() {
         modelBadge.style.border = '1px solid #87e8de';
         modelBadge.style.color = '#006d75';
     } catch (e) { /* ignore */ }
+}
+
+// 登录后拉取后端设置合并到 localStorage（后端优先，覆盖本地同 key 值）
+async function pullSettingsFromBackend() {
+    try {
+        const resp = await fetch('/api/settings');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data && data.success && data.settings && data.settings.llm_config) {
+            safeStorage.set('active-llm-config', data.settings.llm_config);
+        }
+    } catch (e) { /* 未登录/网络错误静默跳过 */ }
 }
 
 async function loadConfig() {

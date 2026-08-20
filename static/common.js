@@ -1,7 +1,24 @@
 /**
  * wybzd · 共享工具函数
- * 两个页面共用：safeStorage、escapeHtml、SSE 解析、Toast
+ * 两个页面共用：safeStorage、escapeHtml、SSE 解析、Toast、fetch 401 拦截
  */
+
+// 全局 401 拦截：API 会话过期/未登录 → 跳登录页
+(function () {
+    const origFetch = window.fetch;
+    window.fetch = function (input, init) {
+        return origFetch.call(this, input, init).then(resp => {
+            const url = typeof input === 'string' ? input : (input && input.url) || '';
+            const isAuthEndpoint = url.indexOf('/api/auth/') !== -1;
+            if (resp.status === 401 && !isAuthEndpoint
+                && !location.pathname.startsWith('/login')) {
+                location.href = '/login';
+                throw new Error('未登录或会话已过期');
+            }
+            return resp;
+        });
+    };
+})();
 
 // ============================================================
 // 安全的 localStorage 操作

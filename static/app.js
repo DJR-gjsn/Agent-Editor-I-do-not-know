@@ -972,6 +972,8 @@ async function testMcpServer(id) {
 // 初始化
 // ============================================================
 async function init() {
+    // 登录后先从后端拉取设置合并到 localStorage（后端优先，loadActiveLLMConfig 之前）
+    await pullSettingsFromBackend();
     // 恢复主题
     restoreTheme();
     // 恢复显示设置（字体大小/行距）
@@ -2537,6 +2539,7 @@ function renderAPIConfigTab(el, comp) {
             savedAt: new Date().toISOString(),
         };
         safeStorage.set('active-llm-config', cfg);
+        syncSettingsToBackend('llm_config', cfg);
     }
 
     // 新增自定义接口按钮
@@ -2660,6 +2663,29 @@ function loadActiveLLMConfig() {
         const raw = safeStorage.getRaw('active-llm-config');
         return raw ? JSON.parse(raw) : null;
     } catch (e) { return null; }
+}
+
+// ============================================================
+// 用户设置同步（多设备）：LLM 配置保存时同步到后端 /api/settings
+// ============================================================
+function syncSettingsToBackend(key, value) {
+    fetch('/api/settings/' + encodeURIComponent(key), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: value }),
+    }).catch(() => {});
+}
+
+// 登录后拉取后端设置合并到 localStorage（后端优先，覆盖本地同 key 值）
+async function pullSettingsFromBackend() {
+    try {
+        const resp = await fetch('/api/settings');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data && data.success && data.settings && data.settings.llm_config) {
+            safeStorage.set('active-llm-config', data.settings.llm_config);
+        }
+    } catch (e) { /* 未登录/网络错误静默跳过 */ }
 }
 
 // ============================================================
@@ -7129,6 +7155,7 @@ function syncAllLLMConfigsToActive() {
             cfg.maxToolRounds = llm.apiSettings.maxToolRounds || 50;
             cfg.savedAt = new Date().toISOString();
             safeStorage.set('active-llm-config', cfg);
+            syncSettingsToBackend('llm_config', cfg);
             break;
         }
     }
@@ -7326,6 +7353,7 @@ const autoSaveConnections = debounce(() => {
 
         cfg.savedAt = new Date().toISOString();
         safeStorage.set('active-llm-config', cfg);
+        syncSettingsToBackend('llm_config', cfg);
 
         // 自动保存完整布局
         if (STATE.components.length > 0) {
