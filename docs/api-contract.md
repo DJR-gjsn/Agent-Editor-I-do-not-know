@@ -147,7 +147,7 @@
 > 文件存储：`data/projects/<username>/<project_id>.json`；`project_id` 仅允许 `[a-zA-Z0-9_-]{1,64}`（`fullmatch` 校验，防目录穿越）。
 > 注意：项目接口沿用存量响应格式（**裸 JSON，不包 `success` 字段**），前端已按此适配。
 
-### 8. GET /api/projects — 列出当前用户项目（按更新时间倒序）
+### 8. GET /api/projects — 列出当前用户项目（按文件修改时间倒序）
 
 成功 `200`：
 

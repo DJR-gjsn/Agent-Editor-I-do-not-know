@@ -120,7 +120,7 @@ erDiagram
 - **密码哈希**：`werkzeug.security.generate_password_hash(password, method="pbkdf2:sha256")`；校验用 `check_password_hash`。数据库只存哈希，明文绝不出现在数据库/日志/前端。
 - **会话生成**：登录成功生成 `session_id = uuid.uuid4().hex`，写入 sessions 表，并通过 HttpOnly Cookie（`session_id=...`，SameSite=Lax，max_age = 7×86400 秒）下发给浏览器。
 - **有效期**：7 天（`SESSION_TTL_DAYS = 7`）。
-- **滑动续期**：每次有效请求（`auth.get_current_user()`）若剩余有效期不足一半（< 3.5 天），则把 `expires_at` 续到当前时间 + 7 天。
+- **滑动续期**：每次有效请求（`auth.get_current_user()`）若剩余有效期不足一半（< 3 天，整数除法 `SESSION_TTL_DAYS // 2`），则把 `expires_at` 续到当前时间 + 7 天。
 - **惰性清理**：会话过期后首次被访问即删除该行（`DELETE FROM sessions WHERE id = ?`）；登出时按 session_id 删除。
 - **登录失败防枚举**：用户不存在与密码错误统一返回 401 "用户名或密码错误"。
 - **CSRF 缓解**：SameSite=Lax + 认证/设置接口仅接受 JSON POST，风险可控（设计文档第九节）。
