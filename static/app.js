@@ -2669,21 +2669,25 @@ function loadActiveLLMConfig() {
 // 用户设置同步（多设备）：LLM 配置保存时同步到后端 /api/settings
 // ============================================================
 function syncSettingsToBackend(key, value) {
+    // 避免明文 apiKey 落盘：浅拷贝后删除 apiKey 字段（多设备同步设计使然，但存储脱敏更安全）
+    const v = { ...value };
+    delete v.apiKey;
     fetch('/api/settings/' + encodeURIComponent(key), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value: value }),
+        body: JSON.stringify({ value: v }),
     }).catch(() => {});
 }
 
-// 登录后拉取后端设置合并到 localStorage（后端优先，覆盖本地同 key 值）
+// 登录后拉取后端设置合并到 localStorage（后端优先：后端有的字段覆盖本地；后端脱敏未存的字段如 apiKey 保留本地）
 async function pullSettingsFromBackend() {
     try {
         const resp = await fetch('/api/settings');
         if (!resp.ok) return;
         const data = await resp.json();
         if (data && data.success && data.settings && data.settings.llm_config) {
-            safeStorage.set('active-llm-config', data.settings.llm_config);
+            const merged = { ...(loadActiveLLMConfig() || {}), ...data.settings.llm_config };
+            safeStorage.set('active-llm-config', merged);
         }
     } catch (e) { /* 未登录/网络错误静默跳过 */ }
 }
@@ -8293,6 +8297,14 @@ function bindToolbarButtons() {
     document.getElementById('btn-load').addEventListener('click', loadLayout);
     document.getElementById('btn-clear').addEventListener('click', clearCanvas);
     document.getElementById('btn-undo').addEventListener('click', undo);
+
+    // 退出登录：登出后清本地 LLM 配置并回登录页
+    const btnLogout = document.getElementById('btn-logout');
+    if (btnLogout) btnLogout.addEventListener('click', async () => {
+        try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+        try { localStorage.removeItem('active-llm-config'); } catch (e) {}
+        location.href = '/login';
+    });
 
     // Ctrl+Z 撤回快捷键
     document.addEventListener('keydown', (e) => {

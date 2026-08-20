@@ -317,14 +317,19 @@ function loadActiveConfig() {
     } catch (e) { /* ignore */ }
 }
 
-// 登录后拉取后端设置合并到 localStorage（后端优先，覆盖本地同 key 值）
+// 登录后拉取后端设置合并到 localStorage（后端优先：后端有的字段覆盖本地；后端脱敏未存的字段如 apiKey 保留本地）
 async function pullSettingsFromBackend() {
     try {
         const resp = await fetch('/api/settings');
         if (!resp.ok) return;
         const data = await resp.json();
         if (data && data.success && data.settings && data.settings.llm_config) {
-            safeStorage.set('active-llm-config', data.settings.llm_config);
+            let local = null;
+            try {
+                const raw = safeStorage.getRaw('active-llm-config');
+                local = raw ? JSON.parse(raw) : null;
+            } catch (e) { /* ignore */ }
+            safeStorage.set('active-llm-config', { ...(local || {}), ...data.settings.llm_config });
         }
     } catch (e) { /* 未登录/网络错误静默跳过 */ }
 }
@@ -373,6 +378,13 @@ function bindEvents() {
     if (skillSelect) {
         skillSelect.addEventListener('change', onSkillChange);
     }
+    // 退出登录：登出后清本地 LLM 配置并回登录页
+    const btnLogout = document.getElementById('btn-logout');
+    if (btnLogout) btnLogout.addEventListener('click', async () => {
+        try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+        try { localStorage.removeItem('active-llm-config'); } catch (e) {}
+        location.href = '/login';
+    });
     // 记忆面板清空按钮
     const memClearBtn = document.getElementById('mem-clear-btn');
     if (memClearBtn) {

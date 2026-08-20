@@ -390,7 +390,11 @@ def api_list_projects():
     projects = []
     for path in sorted(_projects_dir_for_user().glob("*.json"),
                        key=lambda p: p.stat().st_mtime, reverse=True):
-        data = _read_project(path.stem)
+        try:
+            data = _read_project(path.stem)
+        except ValueError:
+            # 用户目录内杂散非法文件名（如含空格/双点的 stem）→ 跳过，不让整个列表 500
+            continue
         if data:
             projects.append(_summarize_project(data))
     return jsonify(projects)
