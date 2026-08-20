@@ -331,8 +331,21 @@ def _ensure_projects_dir():
     PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _projects_dir_for_user():
+    """当前登录用户的项目目录（自动创建）"""
+    user = getattr(request, "user", None)
+    username = user["username"] if user else "anonymous"
+    d = PROJECTS_DIR / username
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def _project_path(project_id):
-    return PROJECTS_DIR / f"{project_id}.json"
+    # 防目录穿越：project_id 仅允许 [a-zA-Z0-9_-]
+    import re as _re
+    if not _re.match(r"^[a-zA-Z0-9_-]{1,64}$", project_id or ""):
+        raise ValueError("非法 project_id")
+    return _projects_dir_for_user() / f"{project_id}.json"
 
 
 def _read_project(project_id):
@@ -368,7 +381,8 @@ def projects_page():
 def api_list_projects():
     _ensure_projects_dir()
     projects = []
-    for path in sorted(PROJECTS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+    for path in sorted(_projects_dir_for_user().glob("*.json"),
+                       key=lambda p: p.stat().st_mtime, reverse=True):
         data = _read_project(path.stem)
         if data:
             projects.append(_summarize_project(data))
@@ -418,7 +432,10 @@ def api_create_or_update_project():
     project_id = body.get("id")
 
     if project_id:
-        existing = _read_project(project_id)
+        try:
+            existing = _read_project(project_id)
+        except ValueError:
+            return jsonify({"error": "非法 project_id"}), 400
         if not existing:
             return jsonify({"error": "项目不存在"}), 404
         existing["name"] = body.get("name", existing.get("name", "未命名"))
@@ -435,7 +452,12 @@ def api_create_or_update_project():
             "updatedAt": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
 
-    with open(_project_path(project_id), "w", encoding="utf-8") as f:
+    try:
+        path = _project_path(project_id)
+    except ValueError:
+        return jsonify({"error": "非法 project_id"}), 400
+
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
     return jsonify({"id": project_id, "name": data["name"]})
@@ -443,7 +465,10 @@ def api_create_or_update_project():
 
 @app.route("/api/projects/<project_id>", methods=["GET"])
 def api_get_project(project_id):
-    data = _read_project(project_id)
+    try:
+        data = _read_project(project_id)
+    except ValueError:
+        return jsonify({"error": "非法 project_id"}), 400
     if not data:
         return jsonify({"error": "项目不存在"}), 404
     return jsonify(data)
@@ -451,7 +476,10 @@ def api_get_project(project_id):
 
 @app.route("/api/projects/<project_id>", methods=["DELETE"])
 def api_delete_project(project_id):
-    path = _project_path(project_id)
+    try:
+        path = _project_path(project_id)
+    except ValueError:
+        return jsonify({"error": "非法 project_id"}), 400
     if path.exists():
         path.unlink()
     return jsonify({"ok": True})
