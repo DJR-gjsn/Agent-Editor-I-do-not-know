@@ -53,3 +53,7 @@ Desktop.ini
 PROJECT_BRIEF.md
 # MCP server 配置（可能含 token，仅存本地）
 data/mcp_config.json
+
+# 用户认证数据库与用户项目目录
+data/app.db
+data/projects/*/
