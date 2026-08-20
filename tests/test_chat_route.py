@@ -35,6 +35,11 @@ class TestChatRoute(unittest.TestCase):
         rules = {str(r) for r in server.app.url_map.iter_rules()}
         self.assertIn("/api/chat", rules)
 
+    def test_login_page_available(self):
+        resp = self.client.get("/login")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Agent Editor", resp.data)
+
     def test_chat_returns_sse_stream(self):
         # api_base 指向不可达地址 → 立即 ConnectionError → SSE 错误事件
         resp = self.client.post("/api/chat", json={

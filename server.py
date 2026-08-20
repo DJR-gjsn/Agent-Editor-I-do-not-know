@@ -379,6 +379,11 @@ def projects_page():
     return render_template("projects.html")
 
 
+@app.route("/login")
+def login_page():
+    return render_template("login.html")
+
+
 @app.route("/api/projects", methods=["GET"])
 def api_list_projects():
     _ensure_projects_dir()
