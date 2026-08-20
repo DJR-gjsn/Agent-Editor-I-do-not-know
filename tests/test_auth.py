@@ -138,6 +138,11 @@ class AuthTestCase(unittest.TestCase):
     def test_settings_require_login(self):
         self.assertEqual(self.client.get("/api/settings").status_code, 401)
 
+    def test_login_page_public(self):
+        # 白名单路径不应 302（无模板时 404 也算未跳转）
+        r = self.client.get("/login")
+        self.assertNotEqual(r.status_code, 302)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -14,7 +14,7 @@ import uuid
 from collections import defaultdict
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import Flask, jsonify, redirect, render_template, request, send_from_directory
 from flask_compress import Compress
 
 import requests
@@ -53,6 +53,32 @@ http_session.headers.update({"Content-Type": "application/json"})
 # 聊天路由（SSE 流式对话）
 from modules.chat_routes import register_chat_routes
 register_chat_routes(app, http_session, _cfg)
+
+# 认证路由 + 数据库初始化（import server 即初始化；测试用 APP_DB_PATH 注入临时路径）
+from modules import auth as auth_module, db
+auth_module.register_routes(app)
+db.init_db()
+
+# ============================================================
+# 登录保护（白名单之外全部需要登录）
+# ============================================================
+PUBLIC_PATHS = ("/login", "/static/", "/favicon.ico",
+                "/api/auth/login", "/api/auth/register")
+
+
+@app.before_request
+def require_login():
+    path = request.path
+    for p in PUBLIC_PATHS:
+        if path == p or (p.endswith("/") and path.startswith(p)):
+            return None
+    user = auth_module.get_current_user()
+    if user:
+        request.user = user
+        return None
+    if path.startswith("/api/"):
+        return jsonify({"success": False, "error": "未登录"}), 401
+    return redirect("/login")
 
 # ============================================================
 # 静态文件缓存（覆盖 debug 模式的 no-cache）
