@@ -228,7 +228,7 @@ class TestProjectPathIsolation(unittest.TestCase):
 
     def test_invalid_project_ids_raise_valueerror(self):
         bad_ids = ("../evil", "a/b", "", "a b", "x.json", "a" * 65, None,
-                   "..", "a\\b", "a:b")
+                   "..", "a\\b", "a:b", "a\n")  # 尾部换行：match+$ 会误放行，fullmatch 封死
         for bad in bad_ids:
             with self.assertRaises(ValueError, msg=f"id={bad!r}"):
                 self._path_for(bad, username="alice")

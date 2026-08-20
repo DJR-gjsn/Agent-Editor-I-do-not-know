@@ -342,8 +342,10 @@ def _projects_dir_for_user():
 
 def _project_path(project_id):
     # 防目录穿越：project_id 仅允许 [a-zA-Z0-9_-]
+    # 用 fullmatch（而非 match+$）：Python 的 $ 锚点接受尾部换行（"a\n" 可通过校验），
+    # 会产生以换行为后缀的怪文件名，fullmatch 封死整个字符串边界。
     import re as _re
-    if not _re.match(r"^[a-zA-Z0-9_-]{1,64}$", project_id or ""):
+    if not _re.fullmatch(r"[a-zA-Z0-9_-]{1,64}", project_id or ""):
         raise ValueError("非法 project_id")
     return _projects_dir_for_user() / f"{project_id}.json"
 
