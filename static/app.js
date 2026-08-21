@@ -495,6 +495,7 @@ function setupSettingsPanel() {
     btnSettings.addEventListener('click', () => {
         overlay.style.display = 'flex';
         renderMcpServers().catch(() => { const box = document.getElementById('mcp-server-list'); if (box) box.innerHTML = '<div style="color:#f5222d;padding:6px 0;">加载 MCP 配置失败</div>'; }); // 打开设置时刷新 MCP server 列表
+        loadAccountInfo(); // 打开设置时刷新账号信息
         // 同步当前选中状态
         const current = document.documentElement.getAttribute('data-theme') || 'industrial';
         applyTheme(current);
@@ -624,6 +625,59 @@ async function testMcpServer(id) {
     const r = await fetchJson(`/api/mcp/servers/${id}/test`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     if (r.success) renderMcpServers();
     alert(r.success ? `连接成功，共 ${r.tool_count} 个工具` : '连接失败: ' + (r.error || ''));
+}
+
+// ============================================================
+// 设置面板账号区：当前用户 / 改密码 / 退出登录
+// ============================================================
+function setupAccountPanel() {
+    const btnChange = document.getElementById('btn-change-pass');
+    const btnAcctLogout = document.getElementById('btn-acct-logout');
+    if (btnChange) btnChange.addEventListener('click', async () => {
+        const oldPass = document.getElementById('acct-old-pass').value;
+        const newPass = document.getElementById('acct-new-pass').value;
+        const msg = document.getElementById('acct-msg');
+        if (!newPass || newPass.length < 6) { msg.textContent = '新密码至少 6 位'; return; }
+        msg.textContent = '修改中…';
+        try {
+            const resp = await fetch('/api/auth/change-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ old_password: oldPass, new_password: newPass }),
+            });
+            const data = await resp.json();
+            if (data.success) {
+                msg.textContent = '✅ 密码已修改';
+                document.getElementById('acct-old-pass').value = '';
+                document.getElementById('acct-new-pass').value = '';
+            } else {
+                msg.textContent = (resp.status === 401 ? '❌ ' : '⚠️ ') + (data.error || '修改失败');
+            }
+        } catch (ex) {
+            msg.textContent = '网络错误: ' + ex.message;
+        }
+    });
+    if (btnAcctLogout) btnAcctLogout.addEventListener('click', async () => {
+        try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+        try { localStorage.removeItem('active-llm-config'); } catch (e) {}
+        location.href = '/login';
+    });
+}
+
+async function loadAccountInfo() {
+    const box = document.getElementById('acct-info');
+    if (!box) return;
+    try {
+        const resp = await fetch('/api/auth/me');
+        const data = await resp.json();
+        if (resp.ok && data.success) {
+            box.textContent = '当前用户：' + data.user.username;
+        } else {
+            box.textContent = '未登录';
+        }
+    } catch (ex) {
+        box.textContent = '获取账号信息失败';
+    }
 }
 
 // ============================================================
@@ -7093,6 +7147,9 @@ function bindToolbarButtons() {
         try { localStorage.removeItem('active-llm-config'); } catch (e) {}
         location.href = '/login';
     });
+
+    // 设置面板账号区：显示当前用户 + 改密码 + 退出登录
+    setupAccountPanel();
 
     // Ctrl+Z 撤回快捷键
     document.addEventListener('keydown', (e) => {

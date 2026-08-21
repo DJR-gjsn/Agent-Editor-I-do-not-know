@@ -95,6 +95,28 @@ def current_user_id():
 # ============================================================
 # Flask 路由
 # ============================================================
+def change_password(old_password, new_password):
+    """修改当前登录用户密码（需验证旧密码；改后使其他会话失效，保留当前会话）"""
+    uid = current_user_id()
+    if not uid:
+        return {"success": False, "error": "未登录"}
+    if not new_password or len(new_password) < 6:
+        return {"success": False, "error": "新密码至少 6 位"}
+    row = db.query_one("SELECT password_hash FROM users WHERE id = ?", (uid,))
+    if not row or not check_password_hash(row["password_hash"], old_password or ""):
+        return {"success": False, "error": "旧密码错误"}
+    db.execute(
+        "UPDATE users SET password_hash = ? WHERE id = ?",
+        (generate_password_hash(new_password, method="pbkdf2:sha256"), uid))
+    # 安全：改密码后使其他会话失效（保留当前会话）
+    sid = request.cookies.get("session_id") if request else None
+    if sid:
+        db.execute("DELETE FROM sessions WHERE user_id = ? AND id != ?", (uid, sid))
+    else:
+        db.execute("DELETE FROM sessions WHERE user_id = ?", (uid,))
+    return {"success": True}
+
+
 def register_routes(app):
     @app.route("/api/auth/register", methods=["POST"])
     def auth_register():
@@ -121,6 +143,17 @@ def register_routes(app):
         resp = jsonify({"success": True})
         resp.delete_cookie("session_id")
         return resp
+
+    @app.route("/api/auth/change-password", methods=["POST"])
+    def auth_change_password():
+        data = request.get_json(force=True, silent=True) or {}
+        result = change_password(data.get("old_password", ""),
+                                 data.get("new_password", ""))
+        if result["success"]:
+            return jsonify(result), 200
+        if result.get("error") in ("未登录", "旧密码错误"):
+            return jsonify(result), 401
+        return jsonify(result), 400
 
     @app.route("/api/auth/me", methods=["GET"])
     def auth_me():

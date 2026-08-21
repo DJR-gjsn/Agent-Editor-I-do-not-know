@@ -88,21 +88,27 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 @app.route("/static/<path:filename>")
 def static_files(filename):
-    """自定义静态文件路由"""
+    """自定义静态文件路由（开发环境不缓存，改代码即时生效）"""
     return send_from_directory(
         STATIC_DIR,
         filename,
-        max_age=300,  # 5分钟缓存，开发阶段平衡性能与即时性
+        max_age=0,  # 开发工具：no-cache，改代码后强刷/自动生效
         conditional=True,
     )
 
 
 @app.after_request
 def _add_cache_headers(response):
-    """为静态文件添加缓存头"""
+    """缓存头：静态文件 no-cache；页面 HTML no-cache（避免登录保护/改版后旧页面残留）"""
     if request.path.startswith("/static/"):
-        response.cache_control.max_age = 300
+        response.cache_control.max_age = 0
         response.cache_control.public = True
+        response.cache_control.no_cache = True
+    elif request.path.startswith("/api/"):
+        response.cache_control.no_cache = True
+    else:
+        # 页面（/、/editor、/chat、/login 等）：每次重新验证，防止浏览器缓存旧版
+        response.cache_control.no_cache = True
     return response
 
 

@@ -143,6 +143,41 @@ class AuthTestCase(unittest.TestCase):
         r = self.client.get("/login")
         self.assertNotEqual(r.status_code, 302)
 
+    def test_change_password_success(self):
+        self._register()
+        self._login()
+        r = self.client.post("/api/auth/change-password",
+                             json={"old_password": "secret123",
+                                   "new_password": "newpass456"})
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.get_json()["success"])
+        # 旧密码登录失败，新密码登录成功
+        self.assertEqual(self._login(password="secret123").status_code, 401)
+        self.assertEqual(self._login(password="newpass456").status_code, 200)
+
+    def test_change_password_wrong_old(self):
+        self._register()
+        self._login()
+        r = self.client.post("/api/auth/change-password",
+                             json={"old_password": "wrongold",
+                                   "new_password": "newpass456"})
+        self.assertEqual(r.status_code, 401)
+        self.assertIn("旧密码错误", r.get_json()["error"])
+
+    def test_change_password_short_new(self):
+        self._register()
+        self._login()
+        r = self.client.post("/api/auth/change-password",
+                             json={"old_password": "secret123",
+                                   "new_password": "123"})
+        self.assertEqual(r.status_code, 400)
+
+    def test_change_password_requires_login(self):
+        r = self.client.post("/api/auth/change-password",
+                             json={"old_password": "x",
+                                   "new_password": "newpass456"})
+        self.assertEqual(r.status_code, 401)
+
 
 if __name__ == "__main__":
     unittest.main()

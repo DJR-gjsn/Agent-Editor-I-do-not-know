@@ -962,6 +962,19 @@
                         <button class="module-btn" id="btn-mcp-add" style="flex:1;">➕ 添加 MCP Server</button>
                     </div>
                 </div>
+                <div class="settings-group">
+                    <label class="settings-label">账号</label>
+                    <div style="margin-top:8px;font-size:13px;">
+                        <div id="acct-info" style="margin-bottom:10px;color:var(--text-secondary);">加载中…</div>
+                        <div style="display:flex;gap:6px;">
+                            <input id="acct-old-pass" type="password" placeholder="旧密码" style="flex:1;padding:6px;border:1px solid #d9d9d9;border-radius:4px;">
+                            <input id="acct-new-pass" type="password" placeholder="新密码（≥6 位）" style="flex:1;padding:6px;border:1px solid #d9d9d9;border-radius:4px;">
+                            <button class="module-btn secondary" id="btn-change-pass" style="flex-shrink:0;">改密码</button>
+                        </div>
+                        <div id="acct-msg" style="margin-top:6px;min-height:16px;font-size:12px;"></div>
+                        <button class="module-btn secondary" id="btn-acct-logout" style="margin-top:6px;width:100%;color:#f5222d;">⏻ 退出登录</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
