@@ -216,11 +216,11 @@
     },
     "tool_name_map": {"web_search": ["web_search"], "mcp_word": ["word_create", "..."]},
     "render_args": {"time_query": ["get_current_time", "当前时间/日期/星期/时间戳"]},
-    "component_categories": {"LLM": ["llm", "..."], "Tools": ["cat-tools"]},
+    "component_categories": {"llm": ["核心", "cat-core"], "web_search": ["工具", "cat-tools"]},
     "quick_templates": [{"key": "search", "name": "🔍 搜索助手", "description": "...",
                          "components": [{"type": "llm", "size": 5, "x": 3, "y": 3, "...": "..."}],
                          "connections": [{"source": 0, "target": 1, "sourcePort": "llm-out", "targetPort": "..."}]}],
-    "provider_presets": [{"name": "DeepSeek", "url": "https://api.deepseek.com", "models": ["deepseek-chat"]}]
+    "provider_presets": [{"name": "OpenAI", "url": "https://api.openai.com/v1", "models": ["gpt-5"]}]
   }
 }
 ```
@@ -232,6 +232,8 @@
   `autoSaveConnections` / `saveActive`）的**单一来源**。
 - `render_args`：工厂渲染组件（simple-tool / mcp-simple / skill 三类，21 项）的显示参数数组，
   供前端工厂包装（`simpleToolPanelRender` / `mcpSimplePanelRender` / `skillPanelRender`）按类型取参。
+- `component_categories`：组件分类映射——**键为组件类型**，值为 `[分类显示名, 分类 CSS class]`
+  （如 `"llm": ["核心", "cat-core"]`），前端 `setupCategoryFilters` 据此渲染分类筛选。
 - `quick_templates`：快速模板（11 个），`components` 用**布局内索引**（`connections.source/target`
   指向 components 下标），前端 `loadAgentPreset` 展开。
 - `provider_presets`：厂商模型预设（`renderAPIConfigTab` 下拉用，空时前端回退"自定义"）。
