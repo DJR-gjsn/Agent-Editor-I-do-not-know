@@ -125,34 +125,8 @@ function getLLMAPIConfig(preferredCompId) {
     return {};
 }
 
-// 统一的工具名映射
-const TOOL_NAME_MAP = {
-    web_search: ['web_search'], calculator: ['calculator'], code_executor: ['code_executor'],
-    text_tools: ['text_analyze', 'text_format'], time_query: ['get_current_time'],
-    url_fetch: ['url_fetch'], file_ops: ['file_read', 'file_write', 'glob_search', 'grep_search', 'file_edit'], json_query: ['json_query'],
-    vector_memory: ['embeddings_search', 'embeddings_index'],
-    mcp_word: ['word_create', 'word_add_heading', 'word_add_paragraph', 'word_add_table', 'word_save'],
-    mcp_excel: ['excel_create', 'excel_write_cell', 'excel_read_cell', 'excel_add_sheet', 'excel_save'],
-    mcp_ppt: ['ppt_create', 'ppt_add_slide', 'ppt_add_text', 'ppt_add_bullet_list', 'ppt_save'],
-    mcp_weather: ['weather_current', 'weather_forecast'],
-    mcp_database: ['db_query', 'db_list_tables', 'db_schema'],
-    mcp_git: ['git_status', 'git_log', 'git_diff', 'git_branch'],
-    mcp_clipboard: ['clipboard_read', 'clipboard_write'],
-    mcp_encoding: ['base64_encode', 'base64_decode', 'hash_compute', 'password_generate', 'uuid_generate', 'regex_test', 'diff_text', 'markdown_to_html', 'html_to_markdown', 'unit_convert', 'url_encode'],
-    mcp_system: ['system_info', 'dns_lookup', 'qr_generate', 'open_file', 'desktop_notify'],
-    mcp_email: ['email_send'],
-    mcp_translate: ['translate_text', 'detect_language'],
-    mcp_calendar: ['calendar_list', 'calendar_create'],
-    mcp_pdf: ['pdf_read', 'pdf_create', 'pdf_merge'],
-    mcp_finance: ['currency_convert', 'stock_price'],
-    mcp_geocode: ['geocode_address', 'reverse_geocode', 'ip_geolocation', 'distance_calc'],
-    mcp_navigation: ['nav_route', 'nav_search_place'],
-    plan: ['plan_generate', 'plan_execute_step'],
-    memory_summarizer: ['memory_summarize'],
-    mcp_zip: ['zip_create', 'zip_extract'],
-    http_request: ['http_request'],
-    image_tools: ['screenshot', 'image_info', 'image_convert', 'image_resize', 'image_compress'],
-};
+// 统一的工具名映射（启动时从后端 /api/meta/components 拉取，applyMeta 填充；拉取失败为空对象）
+let TOOL_NAME_MAP = {};
 
 // 外部 MCP 工具：把节点保存的工具名拼成注册全名（mcp_ext_<server_id>_<tool>），
 // 供三条工具注入链（buildChatPayload / autoSaveConnections / getComponentToolNames）与
@@ -249,152 +223,105 @@ function deserializeComponent(cd, fallbackIndex) {
 }
 
 // ============================================================
-// 组件定义
+// 组件定义（元数据由后端 /api/meta/components 提供，见 applyMeta）
 // ============================================================
-const COMPONENT_DEFS = {
+
+// ── 工厂渲染参数 ──
+// 后端元数据仅保留 renderKey 函数名（工厂调用的参数不随元数据下发），
+// 此处按组件类型重建各工厂渲染所需的显示参数，保持渲染行为与重构前一致。
+const SIMPLE_TOOL_RENDER_ARGS = {
+    time_query: ['get_current_time', '当前时间/日期/星期/时间戳'],
+    url_fetch: ['url_fetch', '抓取网页内容提取纯文本'],
+    file_ops: ['file_ops', '文件读写 / 搜索 / 编辑'],
+    json_query: ['json_query', '用路径语法提取 JSON 字段'],
+    mcp_zip: ['zip_create', 'zip 压缩 / 解压'],
+    http_request: ['http_request', '通用 HTTP 请求（GET/POST/JSON）'],
+    image_tools: ['image_info', '截屏 / 图片信息 / 转换 / 缩放 / 压缩'],
+};
+const MCP_SIMPLE_RENDER_ARGS = {
+    mcp_clipboard: ['clipboard', '系统剪贴板读写', '已就绪'],
+    mcp_encoding: ['encoding', '编码/哈希/密码/UUID/正则/差异/换算', '已就绪'],
+    mcp_system: ['system', '系统信息/DNS/二维码/通知/打开文件', '已就绪'],
+    mcp_calendar: ['calendar', '日程管理 · 本地存储', '已就绪'],
+    mcp_pdf: ['pdf', 'PDF 读取/创建/合并', '需安装 pypdf'],
+    mcp_finance: ['finance', '汇率/股票/加密货币', '已就绪'],
+    mcp_geocode: ['geocode', '地理编码/IP定位/距离计算', '已就绪'],
+};
+const SKILL_RENDER_ARGS = {
+    skill_document: ['document', ['pdf_read/create/merge', 'word_create/add/save', 'markdown_to_html', 'html_to_markdown', 'translate_text', 'file_read/write/edit', 'web_search', 'url_fetch']],
+    skill_frontend: ['frontend-design', ['web_search', 'url_fetch', 'file_read', 'file_write', 'file_edit', 'glob_search', 'grep_search']],
+    skill_uiux: ['ui-ux-pro-max', ['web_search', 'url_fetch', 'file_read', 'file_write', 'file_edit', 'file_search_tools']],
+    skill_find: ['find-skills', ['web_search', 'url_fetch']],
+    skill_creator: ['skill-creator', ['file_read', 'file_write', 'file_edit', 'glob_search', 'grep_search', 'web_search']],
+    skill_super: ['superpowers', []],
+    skill_pua: ['pua', ['web_search', 'url_fetch', 'file_read', 'glob_search', 'grep_search', 'calculator', 'code_executor']],
+};
+
+// 工厂渲染包装：按组件类型取参数后调用对应工厂
+function simpleToolPanelRender(container, comp) {
+    return renderSimpleToolPanel.apply(null, SIMPLE_TOOL_RENDER_ARGS[comp.type] || ['', ''])(container, comp);
+}
+function mcpSimplePanelRender(container, comp) {
+    return renderMCPSimplePanel.apply(null, MCP_SIMPLE_RENDER_ARGS[comp.type] || ['', '', ''])(container, comp);
+}
+function skillPanelRender(container, comp) {
+    return renderSkillPanel.apply(null, SKILL_RENDER_ARGS[comp.type] || ['', []])(container, comp);
+}
+
+// ── renderKey → 渲染函数 本地映射（渲染逻辑永留前端）──
+const RENDER_FN_MAP = {
+    renderLLMPanel,
+    renderSequentialExecutorPanel,
+    renderPlanPanel,
+    renderExecutorPanel,
+    renderSkillsManagerPanel,
+    renderSkillAutoCallPanel,
+    renderLoopPanel,
+    renderMemoryPanel,
+    renderTokenCounterPanel,
+    renderSystemPromptPanel,
+    renderFunctionCallingPanel,
+    renderVisionPanel,
+    renderJSONModePanel,
+    renderEmbeddingsPanel,
+    renderTokenManagerPanel,
+    renderAgentPanel,
+    renderReflectionPanel,
+    renderVectorMemoryPanel,
+    renderKnowledgeBasePanel,
+    renderWorkingMemoryPanel,
+    renderMemorySummarizerPanel,
+    renderConditionalPanel,
+    renderSkillPanel: skillPanelRender,
+    renderWebSearchPanel,
+    renderCalculatorPanel,
+    renderCodeExecutorPanel,
+    renderTextToolsPanel,
+    renderSimpleToolPanel: simpleToolPanelRender,
+    renderMcpExternalPanel,
+    renderMCPWeatherPanel,
+    renderMCPDatabasePanel,
+    renderMCPGitPanel,
+    renderMCPSimplePanel: mcpSimplePanelRender,
+    renderMCPEmailPanel,
+    renderMCPTranslatePanel,
+    renderMCPNavPanel,
+    renderMCPWordPanel,
+    renderMCPExcelPanel,
+    renderMCPPPTPanel,
+};
+
+// ── 内置最小集（后端拉取失败时兜底：llm + 画布常用组件，页面仍可渲染）──
+const FALLBACK_COMPONENT_DEFS = {
     llm: {
         icon: '\u{1F50C}', title: 'LLM API 设置', color: '#4A90D9', defaultSize: 6,
-        render: renderLLMPanel,
+        render: RENDER_FN_MAP.renderLLMPanel,
         ports: { outputs: [{ id: 'llm-out', label: '调用' }], inputs: [{ id: 'llm-mem-in', label: '记忆 ←' }] },
         description: '配置 API 连接 + 一次性对话。连线到功能模块以启用对应能力。接入 Memory 组件后可保留对话历史。',
     },
-    sequential_executor: {
-        icon: '\u{1F500}', title: 'Sequential 顺序', color: '#eb6f2a', defaultSize: 5,
-        render: renderSequentialExecutorPanel,
-        ports: {
-            inputs: [{ id: 'seq-in', label: 'LLM 调用 →' }],
-            outputs: [
-                { id: 'seq-step-1', label: '步骤 1' },
-                { id: 'seq-step-2', label: '步骤 2' },
-                { id: 'seq-step-3', label: '步骤 3' },
-                { id: 'seq-step-4', label: '步骤 4' },
-                { id: 'seq-step-5', label: '步骤 5' },
-            ],
-        },
-        description: '顺序执行器。LLM 的输出连接到此处，工具按步骤端口顺序依次执行。LLM 连接后只能按此组件上连接的功能顺序依次调用。',
-    },
-    plan: {
-        icon: '\u{1F4CB}', title: 'Plan 规划', color: '#389e0d', defaultSize: 5,
-        render: renderPlanPanel,
-        ports: {
-            inputs: [{ id: 'plan-in', label: 'LLM 接入' }],
-            outputs: [{ id: 'plan-out', label: '计划 → 执行器' }],
-        },
-        description: 'Agent 规划模块。分析任务 → 分解步骤 → 生成计划 → 执行后反思 → 自动重规划。连线到 Executor 形成 Plan-Execute-Reflect 循环。',
-    },
-    executor: {
-        icon: '▶', title: 'Executor 执行', color: '#c41d7f', defaultSize: 4,
-        render: renderExecutorPanel,
-        ports: {
-            inputs: [
-                { id: 'exec-llm-in', label: 'LLM 驱动' },
-                { id: 'exec-plan-in', label: 'Plan/Loop 驱动' },
-            ],
-            outputs: [
-                { id: 'exec-tool-1', label: '工具 1' },
-                { id: 'exec-tool-2', label: '工具 2' },
-                { id: 'exec-tool-3', label: '工具 3' },
-                { id: 'exec-tool-4', label: '工具 4' },
-                { id: 'exec-tool-5', label: '工具 5' },
-            ],
-        },
-        description: 'Agent 执行模块。接收单步任务，询问 LLM 决定用什么工具，执行并返回结果。由 Plan/Loop 驱动执行循环。',
-    },
-    // --- 技能管理器 ---
-    skills_manager: {
-        icon: '\u{1F9E0}', title: 'Skills Manager', color: '#a855f7', defaultSize: 5,
-        render: renderSkillsManagerPanel,
-        ports: {
-            inputs: [
-                { id: 'skm-llm-in', label: 'LLM 驱动' },
-            ],
-            outputs: [],
-            // 技能端口动态生成在 outputs（右侧蓝色），数量由 comp.skmPortCount 控制
-        },
-        description: '技能集中管理器。LLM 驱动（左绿），所有技能汇聚于此合并 System Prompt（右蓝）。技能不能直连其他模块。',
-    },
-    // --- 技能自动调用 ---
-    skill_auto_call: {
-        icon: '\u{1F9E0}', title: 'Skill Auto Call', color: '#7c3aed', defaultSize: 4,
-        render: renderSkillAutoCallPanel,
-        ports: {
-            inputs: [
-                { id: 'auto-llm-in', label: 'LLM 驱动' },
-            ],
-            outputs: [
-                { id: 'auto-skm-out', label: '→ Skills Manager' },
-            ],
-        },
-        description: '智能技能调度器。介于 LLM 与 Skills Manager 之间，LLM 可自主选择调用哪些技能，而非全部注入。配合 AI 对话页"智能模式"使用。',
-    },
-    loop: {
-        icon: '\u{1F501}', title: 'Loop 循环', color: '#7b1fa2', defaultSize: 4,
-        render: renderLoopPanel,
-        ports: {
-            inputs: [
-                { id: 'loop-plan-in', label: 'Plan 接入' },
-                { id: 'loop-exec-fb', label: '执行反馈 ←' },
-            ],
-            outputs: [
-                { id: 'loop-exec-out', label: '→ 执行器' },
-                { id: 'loop-break', label: '结束信号' },
-            ],
-        },
-        description: '循环控制器。连接 Plan 和 Executor，构建 Plan→Execute→Reflect→Replan 循环。Plan 决定继续或跳出循环。',
-    },
-    memory: {
-        icon: '\u{1F9E0}', title: 'Chat Memory', color: '#8b5cf6', defaultSize: 3,
-        render: renderMemoryPanel,
-        ports: { outputs: [{ id: 'mem-out', label: '历史 →' }], inputs: [{ id: 'mem-in', label: '写入' }] },
-        description: '存储对话历史。连线到 LLM 组件后，AI 会记住之前的对话内容。断开连线则每次都是全新对话。',
-    },
-    // --- Token 计数器 ---
-    token_counter: {
-        icon: '\u{1F9EE}', title: 'Token 计数器', color: '#f5222d', defaultSize: 3,
-        render: renderTokenCounterPanel,
-        ports: { inputs: [{ id: 'tc-llm-in', label: 'LLM 接入' }], outputs: [] },
-        description: '连接 LLM 后，AI 对话页的输入框上方会实时显示本次对话的 Token 用量。只能连接 LLM。',
-    },
-    system_prompt: {
-        icon: '\u{1F3AD}', title: 'System Prompt', color: '#52c41a', defaultSize: 5,
-        render: renderSystemPromptPanel,
-        ports: { inputs: [{ id: 'sp-in', label: '人设 → LLM' }], outputs: [] },
-        description: '定制 AI 角色、说话风格、回答方式。内置多套人设模板，也可自定义。只能连接到 LLM。',
-    },
-    function_calling: {
-        icon: '\u{1F527}', title: 'Function Calling', color: '#fa8c16', defaultSize: 4,
-        render: renderFunctionCallingPanel,
-        ports: { inputs: [{ id: 'fc-in', label: 'Tools' }], outputs: [] },
-        description: '定义工具 JSON Schema，让 AI 调用外部函数。',
-    },
-    vision: {
-        icon: '\u{1F441}', title: 'Vision 视觉', color: '#eb2f96', defaultSize: 4,
-        render: renderVisionPanel,
-        ports: { inputs: [{ id: 'vis-in', label: 'Vision' }], outputs: [] },
-        description: '上传图片进行多模态理解与分析。',
-    },
-    json_mode: {
-        icon: '\u{1F9EC}', title: 'JSON Mode', color: '#722ed1', defaultSize: 4,
-        render: renderJSONModePanel,
-        ports: { inputs: [{ id: 'jm-in', label: 'JSON Schema' }], outputs: [] },
-        description: '强制 AI 按指定 JSON Schema 输出结构化数据。',
-    },
-    embeddings: {
-        icon: '\u{1F9EE}', title: 'Embeddings', color: '#13c2c2', defaultSize: 3,
-        render: renderEmbeddingsPanel,
-        ports: { inputs: [{ id: 'emb-in', label: 'Embeddings' }], outputs: [] },
-        description: '将文本转换为向量，用于语义搜索与相似度计算。',
-    },
-    token_manager: {
-        icon: '\u{1F3AF}', title: 'Token Manager', color: '#f5222d', defaultSize: 3,
-        render: renderTokenManagerPanel,
-        ports: { inputs: [{ id: 'tm-in', label: 'Token' }], outputs: [] },
-        description: '统计 Token 数量，管理上下文窗口长度。',
-    },
-    // --- 新增: Agent 编排组件 ---
     agent: {
         icon: '\u{1F916}', title: 'Agent 编排器', color: '#667eea', defaultSize: 6,
-        render: renderAgentPanel,
+        render: RENDER_FN_MAP.renderAgentPanel,
         ports: {
             inputs: [
                 { id: 'agent-llm-in', label: 'LLM 大脑' },
@@ -410,328 +337,85 @@ const COMPONENT_DEFS = {
         },
         description: 'Agent 主循环中枢：自动协调 Plan→Execute→Reflect 流程。连线 LLM 大脑 + 记忆 + 工具即可快速构建完整 Agent。一键启动自动循环。',
     },
-    reflection: {
-        icon: '\u{1F4AC}', title: 'Reflection 反思', color: '#d48806', defaultSize: 4,
-        render: renderReflectionPanel,
+    executor: {
+        icon: '▶', title: 'Executor 执行', color: '#c41d7f', defaultSize: 4,
+        render: RENDER_FN_MAP.renderExecutorPanel,
         ports: {
             inputs: [
-                { id: 'refl-plan-in', label: 'Plan 结果' },
-                { id: 'refl-exec-in', label: '执行结果' },
+                { id: 'exec-llm-in', label: 'LLM 驱动' },
+                { id: 'exec-plan-in', label: 'Plan/Loop 驱动' },
             ],
             outputs: [
-                { id: 'refl-continue', label: '继续 →' },
-                { id: 'refl-replan', label: '重规划 →' },
-                { id: 'refl-complete', label: '完成 ✓' },
+                { id: 'exec-tool-1', label: '工具 1' },
+                { id: 'exec-tool-2', label: '工具 2' },
+                { id: 'exec-tool-3', label: '工具 3' },
+                { id: 'exec-tool-4', label: '工具 4' },
+                { id: 'exec-tool-5', label: '工具 5' },
             ],
         },
-        description: '自我评估模块。分析执行结果，判断任务完成度。输出三种信号：继续执行 / 需要重规划 / 任务完成。连接 Plan 和 Executor 形成闭环。',
+        description: 'Agent 执行模块。接收单步任务，询问 LLM 决定用什么工具，执行并返回结果。由 Plan/Loop 驱动执行循环。',
     },
-    vector_memory: {
-        icon: '\u{1F9EE}', title: 'Vector Memory', color: '#13c2c2', defaultSize: 4,
-        render: renderVectorMemoryPanel,
-        ports: {
-            inputs: [{ id: 'vm-in', label: '向量化写入' }],
-            outputs: [{ id: 'vm-out', label: '搜索结果 →' }],
-        },
-        description: '长期语义记忆库。将文本转换为向量并存储，支持语义相似搜索。连线到 LLM 后可检索历史知识。',
+    memory: {
+        icon: '\u{1F9E0}', title: 'Chat Memory', color: '#8b5cf6', defaultSize: 3,
+        render: RENDER_FN_MAP.renderMemoryPanel,
+        ports: { outputs: [{ id: 'mem-out', label: '历史 →' }], inputs: [{ id: 'mem-in', label: '写入' }] },
+        description: '存储对话历史。连线到 LLM 组件后，AI 会记住之前的对话内容。断开连线则每次都是全新对话。',
     },
-    // --- 知识库 ---
-    knowledge_base: {
-        icon: '\u{1F4DA}', title: '知识库', color: '#fa541c', defaultSize: 3,
-        render: renderKnowledgeBasePanel,
-        ports: {
-            outputs: [{ id: 'kb-out', label: '→ 向量记忆' }],
-            inputs: [],
-        },
-        description: '从电脑导入文本文件或粘贴文本到知识库。只能连接到 Vector Memory，可自定义名称（拖出默认 知识库1/2…）。',
+    system_prompt: {
+        icon: '\u{1F3AD}', title: 'System Prompt', color: '#52c41a', defaultSize: 5,
+        render: RENDER_FN_MAP.renderSystemPromptPanel,
+        ports: { inputs: [{ id: 'sp-in', label: '人设 → LLM' }], outputs: [] },
+        description: '定制 AI 角色、说话风格、回答方式。内置多套人设模板，也可自定义。只能连接到 LLM。',
     },
-    working_memory: {
-        icon: '\u{1F4DD}', title: 'Working Memory', color: '#d4b106', defaultSize: 3,
-        render: renderWorkingMemoryPanel,
-        ports: {
-            inputs: [{ id: 'wm-in', label: '写入' }],
-            outputs: [{ id: 'wm-out', label: '读取 →' }],
-        },
-        description: 'Agent 工作草稿板。Key-Value 临时存储，Agent 执行过程中存放中间计算结果和临时数据。任务结束后自动清空。',
+    function_calling: {
+        icon: '\u{1F527}', title: 'Function Calling', color: '#fa8c16', defaultSize: 4,
+        render: RENDER_FN_MAP.renderFunctionCallingPanel,
+        ports: { inputs: [{ id: 'fc-in', label: 'Tools' }], outputs: [] },
+        description: '定义工具 JSON Schema，让 AI 调用外部函数。',
     },
-    memory_summarizer: {
-        icon: '\u{1F4DD}', title: '记忆总结', color: '#722ed1', defaultSize: 3,
-        render: renderMemorySummarizerPanel,
-        ports: {
-            inputs: [{ id: 'ms-in', label: '记忆输入' }],
-            outputs: [{ id: 'ms-out', label: '总结输出' }],
-        },
-        description: '通过 AI 压缩总结对话记忆。只能连接到记忆组件（Memory）。支持手动触发和自动触发（到达设定 token 数时自动总结）。',
-    },
-    conditional: {
-        icon: '\u{1F500}', title: 'Conditional 条件', color: '#389e0d', defaultSize: 4,
-        render: renderConditionalPanel,
-        ports: {
-            inputs: [{ id: 'cond-in', label: '上一步结果' }],
-            outputs: [
-                { id: 'cond-true', label: 'True ✓' },
-                { id: 'cond-false', label: 'False ✗' },
-            ],
-        },
-        description: '条件分支路由。根据上一步执行结果判断：成功走 True 分支，失败走 False 分支。实现 Agent 的 if/else 决策逻辑。',
-    },
-    // --- 技能模块 ---
-    skill_document: {
-        icon: '\u{1F4C4}', title: 'Document Skill', color: '#2b5797', defaultSize: 5,
-        render: renderSkillPanel('document', [
-            'pdf_read/create/merge', 'word_create/add/save',
-            'markdown_to_html', 'html_to_markdown',
-            'translate_text', 'file_read/write/edit',
-            'web_search', 'url_fetch',
-        ]),
-        ports: {
-            inputs: [{ id: 'skill-in', label: 'Skill Prompt -> LLM' }],
-            outputs: [{ id: 'skill-out', label: 'Skill -> Manager' }],
-        },
-        description: '文档处理专家：阅读分析、格式转换、创建生成、翻译校对。连接到 Skills Manager 后注入专业文档处理 System Prompt。',
-    },
-    skill_frontend: {
-        icon: '\u{1F3A8}', title: 'Frontend Design', color: '#ec4899', defaultSize: 5,
-        render: renderSkillPanel('frontend-design', [
-            'web_search', 'url_fetch', 'file_read', 'file_write',
-            'file_edit', 'glob_search', 'grep_search',
-        ]),
-        ports: {
-            inputs: [{ id: 'skill-in', label: 'Skill Prompt -> LLM' }],
-            outputs: [{ id: 'skill-out', label: 'Skill -> Manager' }],
-        },
-        description: '知名设计工作室主管视角。为每个项目打造独一无二的视觉身份：配色系统、字体搭配、布局概念、动效设计。拒绝模板化套路。',
-    },
-    skill_uiux: {
-        icon: '\u{1F3A8}', title: 'UI/UX Pro Max', color: '#8b5cf6', defaultSize: 5,
-        render: renderSkillPanel('ui-ux-pro-max', [
-            'web_search', 'url_fetch', 'file_read', 'file_write',
-            'file_edit', 'file_search_tools',
-        ]),
-        ports: {
-            inputs: [{ id: 'skill-in', label: 'Skill Prompt -> LLM' }],
-            outputs: [{ id: 'skill-out', label: 'Skill -> Manager' }],
-        },
-        description: '全方位 UI/UX 设计智能：84 种风格 + 192 套配色 + 74 组字体 + 98 条 UX 规范，覆盖 22 个技术栈。',
-    },
-    skill_find: {
-        icon: '\u{1F50D}', title: 'Find Skills', color: '#06b6d4', defaultSize: 4,
-        render: renderSkillPanel('find-skills', [
-            'web_search', 'url_fetch',
-        ]),
-        ports: {
-            inputs: [{ id: 'skill-in', label: 'Skill Prompt -> LLM' }],
-            outputs: [{ id: 'skill-out', label: 'Skill -> Manager' }],
-        },
-        description: '从开放 Agent 技能生态中搜索和发现可安装的技能。验证安装量和来源信誉，筛选高质量技能。',
-    },
-    skill_creator: {
-        icon: '\u{26A1}', title: 'Skill Creator', color: '#f59e0b', defaultSize: 5,
-        render: renderSkillPanel('skill-creator', [
-            'file_read', 'file_write', 'file_edit',
-            'glob_search', 'grep_search', 'web_search',
-        ]),
-        ports: {
-            inputs: [{ id: 'skill-in', label: 'Skill Prompt -> LLM' }],
-            outputs: [{ id: 'skill-out', label: 'Skill -> Manager' }],
-        },
-        description: '从零创建、迭代改进和优化 Agent 技能。撰写 SKILL.md、编写测试用例、运行评测、优化触发描述。',
-    },
-    skill_super: {
-        icon: '\u{1F4AA}', title: 'Superpowers', color: '#ef4444', defaultSize: 4,
-        render: renderSkillPanel('superpowers', []),
-        ports: {
-            inputs: [{ id: 'skill-in', label: 'Skill Prompt -> LLM' }],
-            outputs: [{ id: 'skill-out', label: 'Skill -> Manager' }],
-        },
-        description: '元技能——强制在任何操作前先调用合适的技能。红旗检测杜绝合理化借口，流程类技能优先。',
-    },
-    skill_pua: {
-        icon: '\u{1F525}', title: 'PUA Coach', color: '#f97316', defaultSize: 5,
-        render: renderSkillPanel('pua', [
-            'web_search', 'url_fetch', 'file_read',
-            'glob_search', 'grep_search', 'calculator', 'code_executor',
-        ]),
-        ports: {
-            inputs: [{ id: 'skill-in', label: 'Skill Prompt -> LLM' }],
-            outputs: [{ id: 'skill-out', label: 'Skill -> Manager' }],
-        },
-        description: '高绩效文化教练。三条红线（闭环/事实/穷尽）+ 方法论智能路由（华为/阿里/字节/Musk 等）+ L0-L4 压力升级。',
-    },
-    // --- 工具模块 ---
     web_search: {
         icon: '\u{1F50D}', title: 'Web Search', color: '#1890ff', defaultSize: 4,
-        render: renderWebSearchPanel,
+        render: RENDER_FN_MAP.renderWebSearchPanel,
         ports: { inputs: [{ id: 'ws-in', label: '搜索结果 → LLM' }], outputs: [] },
         description: '通过 DuckDuckGo 搜索网页。连线到 LLM 后，搜索结果会作为对话上下文。',
     },
     calculator: {
         icon: '\u{1F5A9}', title: 'Calculator', color: '#2f54eb', defaultSize: 3,
-        render: renderCalculatorPanel,
+        render: RENDER_FN_MAP.renderCalculatorPanel,
         ports: { inputs: [{ id: 'calc-in', label: '计算结果 → LLM' }], outputs: [] },
         description: '安全计算数学表达式。连线到 LLM 后，计算结果会作为对话上下文。',
     },
-    code_executor: {
-        icon: '\u{1F4BB}', title: 'Code Executor', color: '#531dab', defaultSize: 4,
-        render: renderCodeExecutorPanel,
-        ports: { inputs: [{ id: 'code-in', label: '执行结果 → LLM' }], outputs: [] },
-        description: '沙箱执行 Python 代码。连线到 LLM 后，执行输出会作为对话上下文。',
-    },
-    text_tools: {
-        icon: '\u{1F4C4}', title: 'Text Tools', color: '#08979c', defaultSize: 4,
-        render: renderTextToolsPanel,
-        ports: { inputs: [{ id: 'txt-in', label: '分析结果 → LLM' }], outputs: [] },
-        description: '文本统计与格式化。连线到 LLM 后，分析结果会作为对话上下文。',
-    },
-    // --- 常用工具 ---
-    time_query: {
-        icon: '\u{1F550}', title: '时间查询', color: '#595959', defaultSize: 3,
-        render: renderSimpleToolPanel('get_current_time', '当前时间/日期/星期/时间戳'),
-        ports: { inputs: [{ id: 'tq-in', label: '时间 → LLM' }], outputs: [] },
-        description: '获取当前日期、时间、星期、Unix 时间戳。连线到 LLM 后 AI 可回答时间相关问题。',
-    },
-    url_fetch: {
-        icon: '\u{1F310}', title: '网页抓取', color: '#096dd9', defaultSize: 3,
-        render: renderSimpleToolPanel('url_fetch', '抓取网页内容提取纯文本'),
-        ports: { inputs: [{ id: 'uf-in', label: '网页内容 → LLM' }], outputs: [] },
-        description: '抓取指定 URL 的网页并提取纯文本。与 Web Search 互补：搜索找链接，抓取读内容。',
-    },
-    file_ops: {
-        icon: '\u{1F4C2}', title: '文件操作', color: '#d48806', defaultSize: 3,
-        render: renderSimpleToolPanel('file_ops', '文件读写 / 搜索 / 编辑'),
-        ports: { inputs: [{ id: 'fo-in', label: '文件内容 → LLM' }], outputs: [] },
-        description: '工作区文件全套操作：file_read / file_write / glob_search / grep_search / file_edit。AI 可搜索、读写、编辑文件。',
-    },
-    json_query: {
-        icon: '\u{1F50D}', title: 'JSON 查询', color: '#722ed1', defaultSize: 3,
-        render: renderSimpleToolPanel('json_query', '用路径语法提取 JSON 字段'),
-        ports: { inputs: [{ id: 'jq-in', label: '查询结果 → LLM' }], outputs: [] },
-        description: '对 JSON 数据执行路径查询（$.data.items[0].name）。适合解析 API 返回的 JSON。',
-    },
-    // --- 通用工具（压缩/HTTP/图片） ---
-    mcp_zip: {
-        icon: '\u{1F4E6}', title: '压缩工具', color: '#fa8c16', defaultSize: 3,
-        render: renderSimpleToolPanel('zip_create', 'zip 压缩 / 解压'),
-        ports: { inputs: [{ id: 'zip-in', label: '结果 → LLM' }], outputs: [] },
-        description: '文件压缩打包与解压：zip_create 按文件/通配符打包，zip_extract 解压（内置 zip-slip 防护）。适合批量交付文件。',
-    },
-    http_request: {
-        icon: '\u{1F310}', title: 'HTTP 请求', color: '#13c2c2', defaultSize: 3,
-        render: renderSimpleToolPanel('http_request', '通用 HTTP 请求（GET/POST/JSON）'),
-        ports: { inputs: [{ id: 'http-in', label: '响应 → LLM' }], outputs: [] },
-        description: '发送通用 HTTP 请求：支持 GET/POST/PUT/PATCH/DELETE、JSON 请求体、自定义头、查询参数。对接任意第三方 API。',
-    },
-    image_tools: {
-        icon: '\u{1F5BC}', title: '图片工具', color: '#eb2f96', defaultSize: 3,
-        render: renderSimpleToolPanel('image_info', '截屏 / 图片信息 / 转换 / 缩放 / 压缩'),
-        ports: { inputs: [{ id: 'img-in', label: '结果 → LLM' }], outputs: [] },
-        description: '图片全套处理：screenshot 截屏、image_info 查看信息、image_convert 格式转换、image_resize 缩放、image_compress 压缩。',
-    },
     mcp_external: {
         icon: '\u{1F517}', title: '外部 MCP 工具', color: '#389e0d', defaultSize: 5,
-        render: renderMcpExternalPanel,
+        render: RENDER_FN_MAP.renderMcpExternalPanel,
         ports: { inputs: [{ id: 'mcp-ext-in', label: 'LLM 接入' }], outputs: [] },
         description: '连接设置中配置的 MCP server，将其工具注入 LLM。可勾选要使用的工具子集。',
     },
-    // --- MCP 服务 ---
-    mcp_weather: {
-        icon: '\u{1F324}', title: 'Weather 天气', color: '#1890ff', defaultSize: 4,
-        render: renderMCPWeatherPanel,
-        ports: { inputs: [{ id: 'weather-in', label: '天气数据 → LLM' }], outputs: [] },
-        description: '查询实时天气和预报。需要 OpenWeatherMap API Key（免费注册）。支持全球城市天气查询。',
-    },
-    mcp_database: {
-        icon: '\u{1F5C4}', title: 'Database 数据库', color: '#52c41a', defaultSize: 4,
-        render: renderMCPDatabasePanel,
-        ports: { inputs: [{ id: 'db-in', label: '查询结果 → LLM' }], outputs: [] },
-        description: '连接 SQLite 数据库，执行 SELECT 查询、浏览表结构。设置 .sqlite/.db 文件路径即可使用。',
-    },
-    mcp_git: {
-        icon: '\u{1F500}', title: 'Git 版本控制', color: '#fa8c16', defaultSize: 4,
-        render: renderMCPGitPanel,
-        ports: { inputs: [{ id: 'git-in', label: 'Git 信息 → LLM' }], outputs: [] },
-        description: '查看 Git 仓库状态、提交历史、代码差异和分支列表。设置仓库路径即可使用。',
-    },
-    mcp_clipboard: {
-        icon: '\u{1F4CB}', title: 'Clipboard 剪贴板', color: '#722ed1', defaultSize: 3,
-        render: renderMCPSimplePanel('clipboard', '系统剪贴板读写', '已就绪'),
-        ports: { inputs: [{ id: 'clip-in', label: '剪贴板 → LLM' }], outputs: [] },
-        description: '读取和写入系统剪贴板。AI 可以直接获取你复制的内容，或将结果写入剪贴板。',
-    },
-    mcp_encoding: {
-        icon: '\u{1F510}', title: '编码实用工具', color: '#2f54eb', defaultSize: 4,
-        render: renderMCPSimplePanel('encoding', '编码/哈希/密码/UUID/正则/差异/换算', '已就绪'),
-        ports: { inputs: [{ id: 'enc-in', label: '工具结果 → LLM' }], outputs: [] },
-        description: 'Base64、哈希计算、密码生成、UUID、正则测试、文本差异对比、Markdown转换、单位换算、URL编解码。全部使用 Python 内置模块。',
-    },
-    mcp_system: {
-        icon: '\u{1F4BB}', title: 'System 系统工具', color: '#389e0d', defaultSize: 4,
-        render: renderMCPSimplePanel('system', '系统信息/DNS/二维码/通知/打开文件', '已就绪'),
-        ports: { inputs: [{ id: 'sys-in', label: '系统信息 → LLM' }], outputs: [] },
-        description: '系统资源监控、DNS查询、二维码生成、桌面通知、用默认程序打开文件。',
-    },
-    mcp_email: {
-        icon: '\u{2709}', title: 'Email 邮件', color: '#c41d7f', defaultSize: 4,
-        render: renderMCPEmailPanel,
-        ports: { inputs: [{ id: 'email-in', label: '邮件结果 → LLM' }], outputs: [] },
-        description: '通过 SMTP 发送邮件。支持 Gmail/Outlook/QQ/163 及自定义服务器。需要邮箱密码或授权码。',
-    },
-    mcp_translate: {
-        icon: '\u{1F310}', title: 'Translate 翻译', color: '#096dd9', defaultSize: 3,
-        render: renderMCPTranslatePanel,
-        ports: { inputs: [{ id: 'tr-in', label: '翻译结果 → LLM' }], outputs: [] },
-        description: '多语言文本翻译和语言检测。使用免费 deep-translator 库，无需 API Key。',
-    },
-    mcp_calendar: {
-        icon: '\u{1F4C5}', title: 'Calendar 日历', color: '#d4b106', defaultSize: 3,
-        render: renderMCPSimplePanel('calendar', '日程管理 · 本地存储', '已就绪'),
-        ports: { inputs: [{ id: 'cal-in', label: '日程 → LLM' }], outputs: [] },
-        description: '创建和查看日程事件。数据存储在本地 JSON 文件，无需 Google 账号。',
-    },
-    mcp_pdf: {
-        icon: '\u{1F4C4}', title: 'PDF 文档', color: '#cf1322', defaultSize: 3,
-        render: renderMCPSimplePanel('pdf', 'PDF 读取/创建/合并', '需安装 pypdf'),
-        ports: { inputs: [{ id: 'pdf-in', label: 'PDF 内容 → LLM' }], outputs: [] },
-        description: '读取 PDF 提取文本、从 Markdown 创建 PDF、合并多个 PDF。需要 pypdf/fpdf 库。',
-    },
-    mcp_finance: {
-        icon: '\u{1F4B1}', title: 'Finance 金融', color: '#08979c', defaultSize: 3,
-        render: renderMCPSimplePanel('finance', '汇率/股票/加密货币', '已就绪'),
-        ports: { inputs: [{ id: 'fin-in', label: '金融数据 → LLM' }], outputs: [] },
-        description: '实时汇率转换、股票价格查询（Yahoo Finance）、加密货币价格（CoinGecko）。免费无需 API Key。',
-    },
-    mcp_geocode: {
-        icon: '\u{1F4CD}', title: 'Geo 地理', color: '#7b1fa2', defaultSize: 3,
-        render: renderMCPSimplePanel('geocode', '地理编码/IP定位/距离计算', '已就绪'),
-        ports: { inputs: [{ id: 'geo-in', label: '地理数据 → LLM' }], outputs: [] },
-        description: '地址↔坐标转换（OpenStreetMap）、IP归属地查询、两点距离计算。全部免费服务。',
-    },
-    mcp_navigation: {
-        icon: '\u{1F9ED}', title: 'Navigation 导航', color: '#0050b3', defaultSize: 5,
-        render: renderMCPNavPanel,
-        ports: { inputs: [{ id: 'nav-in', label: '导航数据 → LLM' }], outputs: [] },
-        description: '路线规划 + 地点搜索。支持高德/百度/Google Maps/OSRM(免费)。选择提供商并配置 API Key 即可使用。',
-    },
-    // --- MCP Office ---
-    mcp_word: {
-        icon: '\u{1F4DD}', title: 'Word 文档', color: '#2b5797', defaultSize: 4,
-        render: renderMCPWordPanel,
-        ports: { inputs: [{ id: 'word-in', label: 'Word 操作 → LLM' }], outputs: [] },
-        description: '创建与编辑 Word (.docx) 文档。AI 可调用 word_create、word_add_paragraph、word_add_table、word_save 等工具生成专业文档。',
-    },
-    mcp_excel: {
-        icon: '\u{1F4CA}', title: 'Excel 表格', color: '#217346', defaultSize: 4,
-        render: renderMCPExcelPanel,
-        ports: { inputs: [{ id: 'excel-in', label: 'Excel 操作 → LLM' }], outputs: [] },
-        description: '创建与编辑 Excel (.xlsx) 工作簿。AI 可调用 excel_create、excel_write_cell、excel_read_cell、excel_save 等工具处理表格数据。',
-    },
-    mcp_ppt: {
-        icon: '\u{1F4CA}', title: 'PowerPoint', color: '#d24726', defaultSize: 4,
-        render: renderMCPPPTPanel,
-        ports: { inputs: [{ id: 'ppt-in', label: 'PPT 操作 → LLM' }], outputs: [] },
-        description: '创建与编辑 PowerPoint (.pptx) 演示文稿。AI 可调用 ppt_create、ppt_add_slide、ppt_add_text、ppt_add_bullet_list、ppt_save 等工具制作幻灯片。',
-    },
 };
+
+// 从后端元数据构建全局定义（fallback 到内置最小集）
+let COMPONENT_DEFS = { ...FALLBACK_COMPONENT_DEFS };
+let COMPONENT_CATEGORIES = {};
+let QUICK_TEMPLATES = [];
+let PROVIDERS = [{ name: '自定义', url: '', models: [] }];
+
+function applyMeta(data) {
+    COMPONENT_DEFS = {};
+    for (const [type, d] of Object.entries(data.component_defs || {})) {
+        COMPONENT_DEFS[type] = {
+            ...d,
+            render: RENDER_FN_MAP[d.renderKey] || (() => { /* 未知 renderKey 的空渲染 */ }),
+        };
+    }
+    TOOL_NAME_MAP = data.tool_name_map || {};
+    COMPONENT_CATEGORIES = data.component_categories || {};
+    QUICK_TEMPLATES = data.quick_templates || [];
+    PROVIDERS = data.provider_presets || [];
+    // 分类筛选与面板重建依赖这些全局，重新初始化面板
+    if (typeof setupPalletBadges === 'function') setupPalletBadges();
+    if (typeof setupCategoryFilters === 'function') setupCategoryFilters();
+    if (typeof renderPallet === 'function') renderPallet();
+}
 
 // ============================================================
 // DOM 引用
@@ -972,6 +656,11 @@ async function testMcpServer(id) {
 // 初始化
 // ============================================================
 async function init() {
+    // 从后端拉取组件/工具/模板/厂商元数据（后端单一来源）
+    const meta = await fetch('/api/meta/components').then(r => r.ok ? r.json() : null).catch(() => null);
+    if (meta && meta.success && meta.data) applyMeta(meta.data);
+    // 组件库搜索/工具提示依赖 TOOL_NAME_MAP（applyMeta 已填充；拉取失败时为空对象，仅无工具提示）
+    initCompSearch();
     // 登录后先从后端拉取设置合并到 localStorage（后端优先，loadActiveLLMConfig 之前）
     await pullSettingsFromBackend();
     // 恢复主题
@@ -1113,75 +802,6 @@ function initCompSearch() {
     });
 }
 
-// 组件库拖拽 → 画布
-// ============================================================
-// 组件分类角标
-const COMPONENT_CATEGORIES = {
-    // 核心
-    llm:               ['核心', 'cat-core'],
-    system_prompt:     ['核心', 'cat-core'],
-    function_calling:  ['核心', 'cat-core'],
-    json_mode:         ['核心', 'cat-core'],
-    embeddings:        ['核心', 'cat-core'],
-    // 编排
-    agent:              ['编排', 'cat-orch'],
-    plan:               ['编排', 'cat-orch'],
-    reflection:         ['编排', 'cat-orch'],
-    // 流程
-    executor:           ['流程', 'cat-flow'],
-    sequential_executor:['流程', 'cat-flow'],
-    skills_manager:     ['Skill', 'cat-skills'],
-    skill_auto_call:    ['Skill', 'cat-skills'],
-    loop:               ['流程', 'cat-flow'],
-    conditional:        ['流程', 'cat-flow'],
-    // 记忆
-    memory:             ['记忆', 'cat-memory'],
-    token_counter:      ['记忆', 'cat-memory'],
-    knowledge_base:     ['记忆', 'cat-memory'],
-    vector_memory:      ['记忆', 'cat-memory'],
-    working_memory:     ['记忆', 'cat-memory'],
-    token_manager:      ['记忆', 'cat-memory'],
-    memory_summarizer:  ['记忆', 'cat-memory'],
-    // Skills
-    skill_document:     ['Skill', 'cat-skills'],
-    skill_frontend:     ['Skill', 'cat-skills'],
-    skill_uiux:         ['Skill', 'cat-skills'],
-    skill_find:         ['Skill', 'cat-skills'],
-    skill_creator:      ['Skill', 'cat-skills'],
-    skill_super:        ['Skill', 'cat-skills'],
-    skill_pua:          ['Skill', 'cat-skills'],
-    // Tools
-    web_search:         ['Tools', 'cat-tools'],
-    url_fetch:          ['Tools', 'cat-tools'],
-    mcp_zip:            ['Tools', 'cat-tools'],
-    http_request:       ['Tools', 'cat-tools'],
-    image_tools:        ['Tools', 'cat-tools'],
-    calculator:         ['Tools', 'cat-tools'],
-    code_executor:      ['Tools', 'cat-tools'],
-    text_tools:         ['Tools', 'cat-tools'],
-    time_query:         ['Tools', 'cat-tools'],
-    json_query:         ['Tools', 'cat-tools'],
-    file_ops:           ['Tools', 'cat-tools'],
-    vision:             ['Tools', 'cat-tools'],
-    // MCP
-    mcp_word:           ['MCP', 'cat-mcp'],
-    mcp_excel:          ['MCP', 'cat-mcp'],
-    mcp_ppt:            ['MCP', 'cat-mcp'],
-    mcp_weather:        ['MCP', 'cat-mcp'],
-    mcp_database:       ['MCP', 'cat-mcp'],
-    mcp_git:            ['MCP', 'cat-mcp'],
-    mcp_clipboard:      ['MCP', 'cat-mcp'],
-    mcp_encoding:       ['MCP', 'cat-mcp'],
-    mcp_system:         ['MCP', 'cat-mcp'],
-    mcp_email:          ['MCP', 'cat-mcp'],
-    mcp_translate:      ['MCP', 'cat-mcp'],
-    mcp_calendar:       ['MCP', 'cat-mcp'],
-    mcp_pdf:            ['MCP', 'cat-mcp'],
-    mcp_finance:        ['MCP', 'cat-mcp'],
-    mcp_geocode:        ['MCP', 'cat-mcp'],
-    mcp_navigation:     ['MCP', 'cat-mcp'],
-    mcp_external:       ['MCP', 'cat-mcp'],
-};
 
 function setupPalletBadges() {
     document.querySelectorAll('.pallet-item[draggable]').forEach(item => {
@@ -2554,7 +2174,7 @@ function renderAPIConfigTab(el, comp) {
 
         const custom = loadCustomProviders();
         // 避免重名
-        const existing = [...API_PROVIDERS, ...custom].find(p => p.name === name.trim());
+        const existing = [...PROVIDERS, ...custom].find(p => p.name === name.trim());
         if (existing) {
             showToast(`接口「${name.trim()}」已存在`, 'error');
             return;
@@ -8345,20 +7965,7 @@ function bindToolbarButtons() {
     }
 }
 
-// ============================================================
-// API 供应商预设
-// ============================================================
-const API_PROVIDERS = [
-    { name: 'OpenAI', url: 'https://api.openai.com/v1', models: ['gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-5.2'] },
-    { name: 'Groq', url: 'https://api.groq.com/openai/v1', models: ['llama-4-maverick-17b-128e-instruct', 'llama-4-scout-17b-16e-instruct', 'llama-3.3-70b-versatile'] },
-    { name: 'DeepSeek', url: 'https://api.deepseek.com/v1', models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-flash'] },
-    { name: '智谱 (GLM)', url: 'https://open.bigmodel.cn/api/paas/v4', models: ['glm-5', 'glm-5-flash', 'glm-4.5', 'glm-4v-plus'] },
-    { name: '通义千问', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', models: ['qwen-max', 'qwen-plus', 'qwen-turbo', 'qwen3.8-max'] },
-    { name: 'Moonshot (Kimi)', url: 'https://api.moonshot.cn/v1', models: ['kimi-k3', 'kimi-k2-turbo-preview', 'moonshot-v1-128k'] },
-    { name: 'Google Gemini', url: 'https://generativelanguage.googleapis.com/v1beta/openai', models: ['gemini-2.5-pro', 'gemini-2.5-flash'] },
-    { name: 'Ollama (本地)', url: 'http://localhost:11434/v1', models: ['llama3.3', 'qwen3', 'mistral', 'gemma3', 'phi4'] },
-    { name: '自定义', url: '', models: [] },
-];
+// API provider presets (pulled from backend /api/meta/components provider_presets, see applyMeta)
 
 // 自定义接口（从 localStorage 加载）
 function loadCustomProviders() {
@@ -8371,7 +7978,7 @@ function saveCustomProviders(providers) {
     localStorage.setItem('custom-api-providers', JSON.stringify(providers));
 }
 function getAllProviders() {
-    return [...API_PROVIDERS, ...loadCustomProviders()];
+    return [...PROVIDERS, ...loadCustomProviders()];
 }
 
 // 暴露到全局
@@ -8398,4 +8005,4 @@ function updateMemoryPanelFromState() {
     MemoryPanel.update(maxTokens);
 }
 
-document.addEventListener('DOMContentLoaded', () => { init(); ToolMonitor.init(); MemoryPanel.init(); initCompSearch(); });
+document.addEventListener('DOMContentLoaded', () => { init(); ToolMonitor.init(); MemoryPanel.init(); });
