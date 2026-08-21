@@ -105,6 +105,20 @@ def _inject_system_prompt(messages, system_prompt):
     return result
 
 
+def _append_sys_hints(messages, hint):
+    """向现有 system 消息追加提示（日期/session 等）；无 system 消息则前置一条。
+
+    Task 4 新格式专用：system 人设已由 orchestrator.compose_messages 注入
+    messages[0]，这里只追加通用提示，不覆盖组件人设内容。"""
+    result = list(messages)
+    for i, m in enumerate(result):
+        if m.get("role") == "system":
+            result[i] = dict(m, content=str(m.get("content", "")) + hint)
+            return result
+    result.insert(0, {"role": "system", "content": hint})
+    return result
+
+
 logger = logging.getLogger("wybzd")
 
 # 运行时配置（get_config() 结果），由 register_chat_routes 注入
@@ -118,8 +132,42 @@ def register_chat_routes(app, http_session, cfg):
 
     @app.route("/api/chat", methods=["POST"])
     def chat():
-        """LLM 对话接口 — 真正的 SSE 流式返回 + Tool Call 自动循环"""
-        data = request.get_json(force=True)
+        """LLM 对话接口 — 真正的 SSE 流式返回 + Tool Call 自动循环
+
+        Task 4 双格式（阶段2核心）：
+        - 新格式：layout/comp_id/message/llm_config → orchestrator 后端编排
+          （build_payload → 转换进既有 chat_with_tools 流；SSE 事件流与旧格式完全一致）
+        - 旧格式：messages/tools 直接透传（过渡兼容，chat.js 独立对话页等仍使用）
+        """
+        data = request.get_json(force=True, silent=True) or {}
+        # ── 格式分发：新格式 → orchestrator 后端编排 ──
+        if data.get("layout") is not None and data.get("comp_id"):
+            from . import orchestrator
+            llm_cfg = data.get("llm_config") or {}
+            payload = orchestrator.build_payload(
+                data["layout"], data["comp_id"],
+                data.get("message", ""), llm_cfg)
+            # OpenAI payload → 既有 chat_with_tools 流参数
+            # （llm_config 键 camelCase（前端）/ snake_case（测试）统一为 snake_case）
+            data["messages"] = payload["messages"]
+            data["model"] = payload["model"]
+            data["max_tokens"] = payload["max_tokens"]
+            data["temperature"] = payload["temperature"]
+            data["tools"] = payload.get("tools")
+            data["tool_names"] = None
+            data["api_base"] = (llm_cfg.get("apiBase") or llm_cfg.get("api_base")
+                                or _cfg["api_base"])
+            data["api_key"] = (llm_cfg.get("apiKey") or llm_cfg.get("api_key")
+                               or _cfg["api_key"])
+            data["max_tool_rounds"] = (llm_cfg.get("maxToolRounds")
+                                       or llm_cfg.get("max_tool_rounds")
+                                       or data.get("max_tool_rounds") or 50)
+            # compose_messages 已把 system 消息放 messages[0]（组件人设）
+            # → 标记避免默认 system_prompt 覆盖组件内容
+            if (payload["messages"]
+                    and payload["messages"][0].get("role") == "system"):
+                data["_sys_prompt_injected"] = True
+        # 旧格式：messages/tools 直接透传（过渡兼容，无需转换）
         messages = data.get("messages", [])
         model = data.get("model", _cfg["model"])
         api_base = data.get("api_base") or _cfg["api_base"]
@@ -132,13 +180,16 @@ def register_chat_routes(app, http_session, cfg):
         session_id = data.get("session_id", "default")
         date_hint = f"\n\n[当前日期: {today_str}]"
         session_hint = f"\n[session_id: {session_id}] — 调用任何 Office 工具时请使用此 session_id"
-        # 使用请求中的 system_prompt，或回退到配置的默认值
         sys_prompt = data.get("system_prompt") or _cfg.get("system_prompt", "")
-        # _inject_system_prompt 内部仅在需要时拷贝
-        final_messages = _inject_system_prompt(
-            messages,
-            sys_prompt + date_hint + session_hint,
-        )
+        if data.get("_sys_prompt_injected"):
+            # 新格式：system 消息已由 orchestrator 注入（组件人设）→ 只追加日期/session 提示
+            final_messages = _append_sys_hints(messages, date_hint + session_hint)
+        else:
+            # 旧格式：默认 system_prompt 注入（_inject_system_prompt 内部仅在需要时拷贝）
+            final_messages = _inject_system_prompt(
+                messages,
+                sys_prompt + date_hint + session_hint,
+            )
 
         # 消息长度检查
         total_len = sum(len(str(m.get("content", ""))) for m in final_messages)

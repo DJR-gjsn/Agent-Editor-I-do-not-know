@@ -52,6 +52,38 @@ class TestChatRoute(unittest.TestCase):
         body = resp.get_data(as_text=True)
         self.assertIn("data:", body)
 
+    def test_chat_new_format_layout(self):
+        # 新请求体：layout + message（api_base 不可达 → SSE 错误事件，验证路由接受新格式）
+        resp = self.client.post("/api/chat", json={
+            "layout": {"components": [{"id": "llm1", "type": "llm"}],
+                       "connections": []},
+            "comp_id": "llm1",
+            "message": "hi",
+            "llm_config": {"api_base": "http://127.0.0.1:1", "max_tool_rounds": 1},
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("text/event-stream", resp.content_type)
+        body = resp.get_data(as_text=True)
+        self.assertIn("data:", body)
+
+    def test_chat_new_format_layout_with_tool(self):
+        # 新格式：layout 含 calculator 直连工具 → 工具进入 chat_with_tools 流（不可达 api_base
+        # 会先报连接错误；此处主要验证路由不因工具注入 500，且 SSE 事件流正常产出）
+        resp = self.client.post("/api/chat", json={
+            "layout": {"components": [{"id": "llm1", "type": "llm"},
+                                      {"id": "calc", "type": "calculator",
+                                       "toolEnabled": True}],
+                       "connections": [{"sourceCompId": "llm1", "sourcePortId": "llm-out",
+                                        "targetCompId": "calc", "targetPortId": "in"}]},
+            "comp_id": "llm1",
+            "message": "1+1=?",
+            "llm_config": {"api_base": "http://127.0.0.1:1", "max_tool_rounds": 1},
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("text/event-stream", resp.content_type)
+        body = resp.get_data(as_text=True)
+        self.assertIn("data:", body)
+
 
 if __name__ == "__main__":
     unittest.main()
