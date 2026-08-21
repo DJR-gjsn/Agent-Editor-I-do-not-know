@@ -49,6 +49,8 @@ tests/                     15 个测试文件（127 个测试，全部通过）
    编辑器"外部 MCP 工具"组件：引用 server + 勾选工具子集
 8. **登录认证与后端存储**：多用户注册/登录（服务端会话 Cookie、werkzeug 哈希）、SQLite 用户/会话/设置、项目按用户隔离（data/projects/<username>/）、设置多设备同步；docs/database-schema.md + docs/api-contract.md
 9. **前端轻量化重构**（三阶段增量，app.js 8401→7176 行，净删 1225）：① 元数据 API 化——`/api/meta/components`（组件定义/renderKey/工具映射/工厂渲染参数 render_args/模板/厂商预设）、`/api/meta/settings`（主题色板/字号/行距滑块），前端启动拉取 + renderKey 本地映射（渲染逻辑永留前端）；② 编排链后端化——`modules/orchestrator.py`（布局→工具注入→payload，含 mcp_external 动态注册名），`/api/chat` 双格式（新 layout+消息 经 orchestrator 编排 / 旧 messages 透传过渡兼容），SSE 事件流两种格式完全一致；③ 收口——AGENT_PRESETS→QUICK_TEMPLATES 迁移、extract_meta 退役、死代码清理、模板拉取失败 toast。行数验收 ≤4000 未达标（见"前端轻量化重构验收记录"）。
+10. **Docker 部署**：Dockerfile（python:3.14-slim + waitress 生产服务器）+ docker-compose（端口 5000、`./data` 卷持久化、FLASK_ENV=production）；server.py 的 app.run 加 `__main__` 保护；requirements.txt 补全 18 个功能依赖；已在用户本机构建运行验证（waitress 正常服务、数据持久化双向同步）
+11. **账号功能**：设置面板"账号"区（当前用户/改密码/退出登录，`POST /api/auth/change-password` 改密码后其他会话失效）；共享设置面板 settings-panel.js 接入首页/项目管理页（修复首页设置按钮误跳转）；登录落点改为项目首页 /projects；页面与静态资源 no-cache（消除旧页面缓存）
 
 ## 四、Git / GitHub
 
