@@ -23,4 +23,5 @@ RUN mkdir -p /app/data
 EXPOSE 5000
 
 # 生产服务器（server:app 由 waitress 导入，不触发 app.run——见 __main__ 保护）
-CMD ["python", "-m", "waitress.serve", "--host=0.0.0.0", "--port=5000", "server:app"]
+# 用 waitress 官方命令行入口 waitress-serve（python -m waitress.serve 不是有效模块入口）
+CMD ["waitress-serve", "--host=0.0.0.0", "--port=5000", "server:app"]
