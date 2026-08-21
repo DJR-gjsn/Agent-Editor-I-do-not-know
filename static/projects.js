@@ -47,6 +47,14 @@ function setupSettingsIfPresent() {
         });
     });
 
+    // 退出登录：登出后清本地 LLM 配置并回登录页
+    const btnLogout = document.getElementById('btn-logout');
+    if (btnLogout) btnLogout.addEventListener('click', async () => {
+        try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+        try { localStorage.removeItem('active-llm-config'); } catch (e) {}
+        location.href = '/login';
+    });
+
     // 关闭设置
     if (btnClose) {
         btnClose.addEventListener('click', () => { overlay.style.display = 'none'; });

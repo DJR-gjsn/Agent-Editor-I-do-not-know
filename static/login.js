@@ -2,9 +2,9 @@
     const MODE_LOGIN = 'login', MODE_REGISTER = 'register';
     let mode = MODE_LOGIN;
 
-    // 已登录则直接进编辑器
+    // 已登录则直接进项目首页
     fetch('/api/auth/me').then(r => {
-        if (r.ok) location.href = '/editor';
+        if (r.ok) location.href = '/projects';
     }).catch(() => {});
 
     function render() {
@@ -39,7 +39,7 @@
             const data = await resp.json();
             if (data.success) {
                 if (mode === MODE_REGISTER) { mode = MODE_LOGIN; render(); err.textContent = '注册成功，请登录'; return; }
-                location.href = '/editor';
+                location.href = '/projects';
             } else {
                 err.textContent = data.error || '操作失败';
             }
