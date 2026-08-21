@@ -26,58 +26,21 @@ async function init() {
 
 function setupSettingsIfPresent() {
     const btnSettings = document.getElementById('btn-settings');
-    const overlay = document.getElementById('settings-overlay');
-    const btnClose = document.getElementById('settings-close');
-    const themeOptions = document.getElementById('theme-options');
+    if (!btnSettings) return;
 
-    if (!btnSettings || !overlay) return;
-
-    // 恢复当前主题选中状态
-    const current = document.documentElement.getAttribute('data-theme') || 'industrial';
-    themeOptions.querySelectorAll('.theme-option').forEach(opt => {
-        opt.classList.toggle('active', opt.dataset.theme === current);
-    });
-
-    // 打开设置
+    // 打开共享设置面板（主题 + 账号区：当前用户/改密码/退出登录）
     btnSettings.addEventListener('click', () => {
-        overlay.style.display = 'flex';
-        const cur = document.documentElement.getAttribute('data-theme') || 'industrial';
-        themeOptions.querySelectorAll('.theme-option').forEach(opt => {
-            opt.classList.toggle('active', opt.dataset.theme === cur);
-        });
+        if (typeof window.openSettingsPanel === 'function') {
+            window.openSettingsPanel();
+        }
     });
 
-    // 退出登录：登出后清本地 LLM 配置并回登录页
+    // 退出登录：登出后清本地 LLM 配置并回登录页（工具栏按钮）
     const btnLogout = document.getElementById('btn-logout');
     if (btnLogout) btnLogout.addEventListener('click', async () => {
         try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
         try { localStorage.removeItem('active-llm-config'); } catch (e) {}
         location.href = '/login';
-    });
-
-    // 关闭设置
-    if (btnClose) {
-        btnClose.addEventListener('click', () => { overlay.style.display = 'none'; });
-    }
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) overlay.style.display = 'none';
-    });
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && overlay.style.display === 'flex') overlay.style.display = 'none';
-    });
-
-    // 切换主题
-    themeOptions.querySelectorAll('.theme-option').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const theme = btn.dataset.theme;
-            document.documentElement.setAttribute('data-theme', theme);
-            safeStorage.set('wybzd-theme', theme);
-            themeOptions.querySelectorAll('.theme-option').forEach(opt => {
-                opt.classList.toggle('active', opt.dataset.theme === theme);
-            });
-            const names = { industrial: 'Industrial', blue: 'Professional', glass: 'Glassmorphism' };
-            showToast('Theme: ' + names[theme], 'info');
-        });
     });
 }
 

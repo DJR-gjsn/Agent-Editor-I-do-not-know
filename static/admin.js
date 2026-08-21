@@ -34,9 +34,11 @@
         } catch (e) { /* ignore */ }
     }
 
-    // 设置按钮
+    // 设置按钮：打开共享设置面板（主题 + 账号）
     document.getElementById('btn-settings').addEventListener('click', () => {
-        window.location.href = '/projects';
+        if (typeof window.openSettingsPanel === 'function') {
+            window.openSettingsPanel();
+        }
     });
 
     document.addEventListener('DOMContentLoaded', () => { loadStats(); loadInfo(); });
