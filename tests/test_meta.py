@@ -44,6 +44,30 @@ class TestMeta(unittest.TestCase):
             self.assertTrue(re.match(r"^[A-Za-z_$][A-Za-z0-9_$]*$", rk),
                             f"{t} renderKey '{rk}' 非法")
 
+    def test_render_args_present(self):
+        """render_args：工厂渲染组件（simple-tool / mcp-simple / skill）参数齐全、形状正确
+
+        前端 RENDER_FN_MAP 的工厂包装（simpleToolPanelRender / mcpSimplePanelRender /
+        skillPanelRender）从该映射取显示参数，不再在 app.js 内硬编码。
+        """
+        data = self.client.get("/api/meta/components").get_json()["data"]
+        ra = data.get("render_args", {})
+        self.assertGreater(len(ra), 0, "应有 render_args")
+        for t, args in ra.items():
+            self.assertIsInstance(args, list, f"{t} render_args 非数组")
+            self.assertGreater(len(args), 0, f"{t} render_args 为空")
+            self.assertIsInstance(args[0], str, f"{t} render_args[0] 应为字符串")
+        # 与前端消费契约对齐的抽查（simple / mcp-simple / skill 各一类）
+        self.assertEqual(ra["time_query"],
+                         ["get_current_time", "当前时间/日期/星期/时间戳"])
+        self.assertEqual(ra["mcp_clipboard"],
+                         ["clipboard", "系统剪贴板读写", "已就绪"])
+        self.assertEqual(ra["skill_super"], ["superpowers", []])
+        # 工厂包装需要的三类组件全覆盖
+        for t in ("time_query", "mcp_clipboard", "skill_document", "skill_pua",
+                  "mcp_zip", "http_request", "image_tools", "mcp_geocode"):
+            self.assertIn(t, ra, f"{t} 缺 render_args")
+
     def test_settings_endpoint_structure(self):
         """/api/meta/settings：themes 非空，主题字段完整，字号/行距滑块元数据齐全"""
         r = self.client.get("/api/meta/settings")

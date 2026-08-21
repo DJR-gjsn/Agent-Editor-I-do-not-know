@@ -224,46 +224,19 @@ function deserializeComponent(cd, fallbackIndex) {
 // 组件定义（元数据由后端 /api/meta/components 提供，见 applyMeta）
 // ============================================================
 
-// ── 工厂渲染参数 ──
-// 后端元数据仅保留 renderKey 函数名（工厂调用的参数不随元数据下发），
-// 此处按组件类型重建各工厂渲染所需的显示参数，保持渲染行为与重构前一致。
-const SIMPLE_TOOL_RENDER_ARGS = {
-    time_query: ['get_current_time', '当前时间/日期/星期/时间戳'],
-    url_fetch: ['url_fetch', '抓取网页内容提取纯文本'],
-    file_ops: ['file_ops', '文件读写 / 搜索 / 编辑'],
-    json_query: ['json_query', '用路径语法提取 JSON 字段'],
-    mcp_zip: ['zip_create', 'zip 压缩 / 解压'],
-    http_request: ['http_request', '通用 HTTP 请求（GET/POST/JSON）'],
-    image_tools: ['image_info', '截屏 / 图片信息 / 转换 / 缩放 / 压缩'],
-};
-const MCP_SIMPLE_RENDER_ARGS = {
-    mcp_clipboard: ['clipboard', '系统剪贴板读写', '已就绪'],
-    mcp_encoding: ['encoding', '编码/哈希/密码/UUID/正则/差异/换算', '已就绪'],
-    mcp_system: ['system', '系统信息/DNS/二维码/通知/打开文件', '已就绪'],
-    mcp_calendar: ['calendar', '日程管理 · 本地存储', '已就绪'],
-    mcp_pdf: ['pdf', 'PDF 读取/创建/合并', '需安装 pypdf'],
-    mcp_finance: ['finance', '汇率/股票/加密货币', '已就绪'],
-    mcp_geocode: ['geocode', '地理编码/IP定位/距离计算', '已就绪'],
-};
-const SKILL_RENDER_ARGS = {
-    skill_document: ['document', ['pdf_read/create/merge', 'word_create/add/save', 'markdown_to_html', 'html_to_markdown', 'translate_text', 'file_read/write/edit', 'web_search', 'url_fetch']],
-    skill_frontend: ['frontend-design', ['web_search', 'url_fetch', 'file_read', 'file_write', 'file_edit', 'glob_search', 'grep_search']],
-    skill_uiux: ['ui-ux-pro-max', ['web_search', 'url_fetch', 'file_read', 'file_write', 'file_edit', 'file_search_tools']],
-    skill_find: ['find-skills', ['web_search', 'url_fetch']],
-    skill_creator: ['skill-creator', ['file_read', 'file_write', 'file_edit', 'glob_search', 'grep_search', 'web_search']],
-    skill_super: ['superpowers', []],
-    skill_pua: ['pua', ['web_search', 'url_fetch', 'file_read', 'glob_search', 'grep_search', 'calculator', 'code_executor']],
-};
+// ── 工厂渲染参数（单一来源：后端 /api/meta/components 的 render_args，applyMeta 填充）──
+// 显示参数随元数据下发，前端只保留"按类型取参 → 调工厂"的渲染包装；
+// 元数据缺失时回退空参数（与后端无该项时行为一致）。
+let RENDER_ARGS = {};
 
-// 工厂渲染包装：按组件类型取参数后调用对应工厂
 function simpleToolPanelRender(container, comp) {
-    return renderSimpleToolPanel.apply(null, SIMPLE_TOOL_RENDER_ARGS[comp.type] || ['', ''])(container, comp);
+    return renderSimpleToolPanel.apply(null, RENDER_ARGS[comp.type] || ['', ''])(container, comp);
 }
 function mcpSimplePanelRender(container, comp) {
-    return renderMCPSimplePanel.apply(null, MCP_SIMPLE_RENDER_ARGS[comp.type] || ['', '', ''])(container, comp);
+    return renderMCPSimplePanel.apply(null, RENDER_ARGS[comp.type] || ['', '', ''])(container, comp);
 }
 function skillPanelRender(container, comp) {
-    return renderSkillPanel.apply(null, SKILL_RENDER_ARGS[comp.type] || ['', []])(container, comp);
+    return renderSkillPanel.apply(null, RENDER_ARGS[comp.type] || ['', []])(container, comp);
 }
 
 // ── renderKey → 渲染函数 本地映射（渲染逻辑永留前端）──
@@ -406,6 +379,7 @@ function applyMeta(data) {
         };
     }
     TOOL_NAME_MAP = data.tool_name_map || {};
+    RENDER_ARGS = data.render_args || {};
     COMPONENT_CATEGORIES = data.component_categories || {};
     QUICK_TEMPLATES = data.quick_templates || [];
     // 厂商预设空兜底：至少保留"自定义"（防 renderAPIConfigTab 空数组崩溃）
@@ -415,7 +389,6 @@ function applyMeta(data) {
     // 分类筛选与面板重建依赖这些全局，重新初始化面板
     if (typeof setupPalletBadges === 'function') setupPalletBadges();
     if (typeof setupCategoryFilters === 'function') setupCategoryFilters();
-    if (typeof renderPallet === 'function') renderPallet();
 }
 
 // ============================================================
@@ -3200,15 +3173,7 @@ function validateConnection(sourceComp, targetComp) {
 // ============================================================
 // Plan 面板 — 任务规划与分步执行
 // ============================================================
-// ── 查找连接到指定组件的 Memory / LLM ──
-function findConnectedMemory(llmCompId) {
-    const hit = findConnTo(llmCompId, 'llm-mem-in');
-    if (hit && hit.source && hit.source.type === 'memory') {
-        if (!hit.source.messages) hit.source.messages = [];
-        return hit.source;
-    }
-    return null;
-}
+// ── 查找连接到指定组件的 LLM ──
 function findConnectedLLM(compId) {
     // Plan input port is 'plan-in', other components vary
     const hit = findConnTo(compId, 'plan-in') || findConnTo(compId, 'exec-llm-in');
@@ -4979,9 +4944,9 @@ function renderConditionalPanel(container, comp) {
 // ============================================================
 function loadAgentPreset(presetName) {
     // 按键（与 index.html preset-btn 的 data-preset 对应）在 QUICK_TEMPLATES 中查找；
-    // 元数据拉取失败时为空数组 → no-op
+    // 元数据拉取失败时为空数组 → toast 提示（不再静默 no-op）
     const preset = QUICK_TEMPLATES.find(t => t.key === presetName);
-    if (!preset) return;
+    if (!preset) { showToast('⚠️ 模板数据未加载（元数据拉取失败），无法加载模板', 'error'); return; }
 
     // 确认覆盖
     if (STATE.components.length > 0) {

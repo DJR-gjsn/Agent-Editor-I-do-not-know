@@ -1760,6 +1760,29 @@ _DATA = {
       "cat-mcp"
     ]
   },
+  "render_args": {
+    "time_query": ["get_current_time", "当前时间/日期/星期/时间戳"],
+    "url_fetch": ["url_fetch", "抓取网页内容提取纯文本"],
+    "file_ops": ["file_ops", "文件读写 / 搜索 / 编辑"],
+    "json_query": ["json_query", "用路径语法提取 JSON 字段"],
+    "mcp_zip": ["zip_create", "zip 压缩 / 解压"],
+    "http_request": ["http_request", "通用 HTTP 请求（GET/POST/JSON）"],
+    "image_tools": ["image_info", "截屏 / 图片信息 / 转换 / 缩放 / 压缩"],
+    "mcp_clipboard": ["clipboard", "系统剪贴板读写", "已就绪"],
+    "mcp_encoding": ["encoding", "编码/哈希/密码/UUID/正则/差异/换算", "已就绪"],
+    "mcp_system": ["system", "系统信息/DNS/二维码/通知/打开文件", "已就绪"],
+    "mcp_calendar": ["calendar", "日程管理 · 本地存储", "已就绪"],
+    "mcp_pdf": ["pdf", "PDF 读取/创建/合并", "需安装 pypdf"],
+    "mcp_finance": ["finance", "汇率/股票/加密货币", "已就绪"],
+    "mcp_geocode": ["geocode", "地理编码/IP定位/距离计算", "已就绪"],
+    "skill_document": ["document", ["pdf_read/create/merge", "word_create/add/save", "markdown_to_html", "html_to_markdown", "translate_text", "file_read/write/edit", "web_search", "url_fetch"]],
+    "skill_frontend": ["frontend-design", ["web_search", "url_fetch", "file_read", "file_write", "file_edit", "glob_search", "grep_search"]],
+    "skill_uiux": ["ui-ux-pro-max", ["web_search", "url_fetch", "file_read", "file_write", "file_edit", "file_search_tools"]],
+    "skill_find": ["find-skills", ["web_search", "url_fetch"]],
+    "skill_creator": ["skill-creator", ["file_read", "file_write", "file_edit", "glob_search", "grep_search", "web_search"]],
+    "skill_super": ["superpowers", []],
+    "skill_pua": ["pua", ["web_search", "url_fetch", "file_read", "glob_search", "grep_search", "calculator", "code_executor"]]
+  },
   "quick_templates": [
     {
       "key": "search",
