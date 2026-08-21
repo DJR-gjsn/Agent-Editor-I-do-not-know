@@ -39,6 +39,8 @@ def register_all(app):
     from . import vector_memory
     # 外部 MCP 工具
     from . import mcp_client, mcp_manager
+    # 前端元数据（组件定义/工具映射/分类/模板/厂商预设）
+    from . import meta
 
     system_prompt.register_routes(app)
     function_calling.register_routes(app)
@@ -80,5 +82,6 @@ def register_all(app):
     memory_summarizer.register_routes(app)
     vector_memory.register_routes(app)
     mcp_manager.register_routes(app)
+    meta.register_routes(app)
     # 启动时同步 enabled server（init 内逐 server try/except，连接失败不阻塞启动）
     mcp_manager.init_mcp_manager()
