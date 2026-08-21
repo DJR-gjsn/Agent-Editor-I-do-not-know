@@ -163,5 +163,200 @@ class TestOrchestrator(unittest.TestCase):
         self.assertEqual(users[0]["content"], "hi")
 
 
+    # ── Task 5：中介链收口 — executor ──
+    def test_executor_chain_injects_downstream_tools(self):
+        # LLM → executor → 工具端口（exec-tool-N）连到的工具组件注入，按端口顺序
+        layout = _layout(
+            [{"id": "llm1", "type": "llm"},
+             {"id": "exec", "type": "executor"},
+             {"id": "calc", "type": "calculator"},
+             {"id": "ws", "type": "web_search"}],
+            [{"sourceCompId": "llm1", "sourcePortId": "llm-out",
+              "targetCompId": "exec", "targetPortId": "exec-llm-in"},
+             {"sourceCompId": "exec", "sourcePortId": "exec-tool-1",
+              "targetCompId": "calc", "targetPortId": "in"},
+             {"sourceCompId": "exec", "sourcePortId": "exec-tool-2",
+              "targetCompId": "ws", "targetPortId": "in"}])
+        tools = orchestrator.resolve_tools(layout, "llm1")
+        self.assertEqual(tools, ["calculator", "web_search"])
+
+    def test_executor_chain_mediator_tool_enabled_false(self):
+        # 中介自身 toolEnabled === false → 整链不注入（前端 executor case 门控）
+        layout = _layout(
+            [{"id": "llm1", "type": "llm"},
+             {"id": "exec", "type": "executor", "toolEnabled": False},
+             {"id": "calc", "type": "calculator"}],
+            [{"sourceCompId": "llm1", "sourcePortId": "llm-out",
+              "targetCompId": "exec", "targetPortId": "exec-llm-in"},
+             {"sourceCompId": "exec", "sourcePortId": "exec-tool-1",
+              "targetCompId": "calc", "targetPortId": "in"}])
+        self.assertEqual(orchestrator.resolve_tools(layout, "llm1"), [])
+
+    def test_executor_chain_downstream_tool_enabled_false(self):
+        # 下游工具组件 toolEnabled === false → 跳过（与直连路径同一门控规则）
+        layout = _layout(
+            [{"id": "llm1", "type": "llm"},
+             {"id": "exec", "type": "executor"},
+             {"id": "calc", "type": "calculator", "toolEnabled": False},
+             {"id": "ws", "type": "web_search"}],
+            [{"sourceCompId": "llm1", "sourcePortId": "llm-out",
+              "targetCompId": "exec", "targetPortId": "exec-llm-in"},
+             {"sourceCompId": "exec", "sourcePortId": "exec-tool-1",
+              "targetCompId": "calc", "targetPortId": "in"},
+             {"sourceCompId": "exec", "sourcePortId": "exec-tool-2",
+              "targetCompId": "ws", "targetPortId": "in"}])
+        tools = orchestrator.resolve_tools(layout, "llm1")
+        self.assertEqual(tools, ["web_search"])
+
+    def test_executor_chain_mcp_external_subset(self):
+        # executor 下游 mcp_external：toolNames 显式子集 → 只注入子集动态全名
+        tool_registry.register("mcp_ext_git_echo", {"name": "mcp_ext_git_echo"},
+                               lambda args: "ok")
+        tool_registry.register("mcp_ext_git_status", {"name": "mcp_ext_git_status"},
+                               lambda args: "ok")
+        self.addCleanup(tool_registry.unregister, "mcp_ext_git_echo")
+        self.addCleanup(tool_registry.unregister, "mcp_ext_git_status")
+        layout = _layout(
+            [{"id": "llm1", "type": "llm"},
+             {"id": "exec", "type": "executor"},
+             {"id": "ext", "type": "mcp_external", "serverId": "git",
+              "toolNames": ["echo"]}],
+            [{"sourceCompId": "llm1", "sourcePortId": "llm-out",
+              "targetCompId": "exec", "targetPortId": "exec-llm-in"},
+             {"sourceCompId": "exec", "sourcePortId": "exec-tool-1",
+              "targetCompId": "ext", "targetPortId": "mcp-ext-in"}])
+        self.assertEqual(orchestrator.resolve_tools(layout, "llm1"),
+                         ["mcp_ext_git_echo"])
+
+    def test_executor_chain_dynamic_port_count(self):
+        # execPortCount 决定端口数（前端可动态加端口）；超出计数的端口连线忽略
+        layout = _layout(
+            [{"id": "llm1", "type": "llm"},
+             {"id": "exec", "type": "executor", "execPortCount": 2},
+             {"id": "c1", "type": "calculator"},
+             {"id": "c2", "type": "time_query"},
+             {"id": "c3", "type": "web_search"}],
+            [{"sourceCompId": "llm1", "sourcePortId": "llm-out",
+              "targetCompId": "exec", "targetPortId": "exec-llm-in"},
+             {"sourceCompId": "exec", "sourcePortId": "exec-tool-1",
+              "targetCompId": "c1", "targetPortId": "in"},
+             {"sourceCompId": "exec", "sourcePortId": "exec-tool-2",
+              "targetCompId": "c2", "targetPortId": "in"},
+             {"sourceCompId": "exec", "sourcePortId": "exec-tool-3",
+              "targetCompId": "c3", "targetPortId": "in"}])
+        tools = orchestrator.resolve_tools(layout, "llm1")
+        self.assertEqual(tools, ["calculator", "get_current_time"])
+
+    def test_executor_chain_dedup(self):
+        # 两个端口连同一工具组件 → 去重一次（前端 collectExecutorToolNames Set）
+        layout = _layout(
+            [{"id": "llm1", "type": "llm"},
+             {"id": "exec", "type": "executor"},
+             {"id": "calc", "type": "calculator"}],
+            [{"sourceCompId": "llm1", "sourcePortId": "llm-out",
+              "targetCompId": "exec", "targetPortId": "exec-llm-in"},
+             {"sourceCompId": "exec", "sourcePortId": "exec-tool-1",
+              "targetCompId": "calc", "targetPortId": "in"},
+             {"sourceCompId": "exec", "sourcePortId": "exec-tool-2",
+              "targetCompId": "calc", "targetPortId": "in"}])
+        self.assertEqual(orchestrator.resolve_tools(layout, "llm1"),
+                         ["calculator"])
+
+    # ── Task 5：中介链收口 — sequential_executor ──
+    def test_sequential_chain_ordered_steps(self):
+        # 步骤端口顺序即收集顺序（seq-step-1..5）；file_ops 展开多工具
+        layout = _layout(
+            [{"id": "llm1", "type": "llm"},
+             {"id": "seq", "type": "sequential_executor"},
+             {"id": "ws", "type": "web_search"},
+             {"id": "fo", "type": "file_ops"}],
+            [{"sourceCompId": "llm1", "sourcePortId": "llm-out",
+              "targetCompId": "seq", "targetPortId": "seq-in"},
+             {"sourceCompId": "seq", "sourcePortId": "seq-step-1",
+              "targetCompId": "ws", "targetPortId": "in"},
+             {"sourceCompId": "seq", "sourcePortId": "seq-step-2",
+              "targetCompId": "fo", "targetPortId": "in"}])
+        tools = orchestrator.resolve_tools(layout, "llm1")
+        self.assertEqual(tools, ["web_search", "file_read", "file_write",
+                                 "glob_search", "grep_search", "file_edit"])
+
+    def test_sequential_chain_no_mediator_gate(self):
+        # 前端 sequential_executor case 无 toolEnabled 门控（与 executor/agent 不对称）
+        # → 中介 toolEnabled=false 仍注入下游工具
+        layout = _layout(
+            [{"id": "llm1", "type": "llm"},
+             {"id": "seq", "type": "sequential_executor", "toolEnabled": False},
+             {"id": "ws", "type": "web_search"}],
+            [{"sourceCompId": "llm1", "sourcePortId": "llm-out",
+              "targetCompId": "seq", "targetPortId": "seq-in"},
+             {"sourceCompId": "seq", "sourcePortId": "seq-step-1",
+              "targetCompId": "ws", "targetPortId": "in"}])
+        self.assertEqual(orchestrator.resolve_tools(layout, "llm1"),
+                         ["web_search"])
+
+    def test_sequential_chain_replaces_direct_tools(self):
+        # 有序工具覆盖当前列表（前端 toolNames.length=0; push(...seqNames)）：
+        # 直连 calculator 先收集，sequential 后出现 → 被替换
+        layout = _layout(
+            [{"id": "llm1", "type": "llm"},
+             {"id": "calc", "type": "calculator"},
+             {"id": "seq", "type": "sequential_executor"},
+             {"id": "ws", "type": "web_search"}],
+            [{"sourceCompId": "llm1", "sourcePortId": "llm-out",
+              "targetCompId": "calc", "targetPortId": "in"},
+             {"sourceCompId": "llm1", "sourcePortId": "llm-out",
+              "targetCompId": "seq", "targetPortId": "seq-in"},
+             {"sourceCompId": "seq", "sourcePortId": "seq-step-1",
+              "targetCompId": "ws", "targetPortId": "in"}])
+        self.assertEqual(orchestrator.resolve_tools(layout, "llm1"),
+                         ["web_search"])
+
+    # ── Task 5：中介链收口 — agent ──
+    def test_agent_chain_injects_downstream_tools(self):
+        # LLM → agent → agent-tool-N 端口连到的工具注入（端口顺序、去重追加）
+        layout = _layout(
+            [{"id": "llm1", "type": "llm"},
+             {"id": "ag", "type": "agent"},
+             {"id": "calc", "type": "calculator"},
+             {"id": "tq", "type": "time_query"},
+             {"id": "calc2", "type": "calculator"}],
+            [{"sourceCompId": "llm1", "sourcePortId": "llm-out",
+              "targetCompId": "ag", "targetPortId": "agent-llm-in"},
+             {"sourceCompId": "ag", "sourcePortId": "agent-tool-1",
+              "targetCompId": "calc", "targetPortId": "in"},
+             {"sourceCompId": "ag", "sourcePortId": "agent-tool-2",
+              "targetCompId": "tq", "targetPortId": "in"},
+             {"sourceCompId": "ag", "sourcePortId": "agent-tool-3",
+              "targetCompId": "calc2", "targetPortId": "in"}])
+        tools = orchestrator.resolve_tools(layout, "llm1")
+        self.assertEqual(tools, ["calculator", "get_current_time"])
+
+    def test_agent_chain_mediator_tool_enabled_false(self):
+        # 中介自身 toolEnabled === false → 整链不注入（前端 agent case 门控）
+        layout = _layout(
+            [{"id": "llm1", "type": "llm"},
+             {"id": "ag", "type": "agent", "toolEnabled": False},
+             {"id": "ws", "type": "web_search"}],
+            [{"sourceCompId": "llm1", "sourcePortId": "llm-out",
+              "targetCompId": "ag", "targetPortId": "agent-llm-in"},
+             {"sourceCompId": "ag", "sourcePortId": "agent-tool-1",
+              "targetCompId": "ws", "targetPortId": "in"}])
+        self.assertEqual(orchestrator.resolve_tools(layout, "llm1"), [])
+
+    # ── Task 5：新格式连线键（前端 buildLayoutData 序列化写 sourcePort/targetPort）──
+    def test_mediator_chain_new_format_port_keys(self):
+        # 新格式布局（sourcePort 键，编辑器内嵌对话实际发送格式）也能解析中介链
+        layout = _layout(
+            [{"id": "llm1", "type": "llm"},
+             {"id": "exec", "type": "executor"},
+             {"id": "calc", "type": "calculator"}],
+            [{"sourceCompId": "llm1", "sourcePort": "llm-out",
+              "targetCompId": "exec", "targetPort": "exec-llm-in"},
+             {"sourceCompId": "exec", "sourcePort": "exec-tool-1",
+              "targetCompId": "calc", "targetPort": "in"}])
+        self.assertEqual(orchestrator.resolve_tools(layout, "llm1"),
+                         ["calculator"])
+
+
 if __name__ == "__main__":
     unittest.main()
