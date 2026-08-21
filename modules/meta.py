@@ -3293,7 +3293,44 @@ _DATA = {
   ]
 }
 
+# 设置面板元数据（从 static/app.js 设置面板代码 + templates/index.html 提取，人工维护）
+_SETTINGS_DATA = {
+  "themes": [
+    {
+      "key": "industrial",
+      "name": "Industrial",
+      "description": "机能风 · 亮黄+黑灰"
+    },
+    {
+      "key": "blue",
+      "name": "Professional",
+      "description": "专业风 · 蓝+白"
+    },
+    {
+      "key": "glass",
+      "name": "Glassmorphism",
+      "description": "玻璃态 · 紫蓝渐变+毛玻璃"
+    }
+  ],
+  "fontSizes": {
+    "min": 0.8,
+    "max": 1.2,
+    "step": 0.05,
+    "default": 1.0
+  },
+  "lineHeights": {
+    "min": 1.2,
+    "max": 2.2,
+    "step": 0.1,
+    "default": 1.6
+  }
+}
+
 def register_routes(app):
     @app.route("/api/meta/components", methods=["GET"])
     def meta_components():
         return jsonify({"success": True, "data": _DATA})
+
+    @app.route("/api/meta/settings", methods=["GET"])
+    def meta_settings():
+        return jsonify({"success": True, "data": _SETTINGS_DATA})

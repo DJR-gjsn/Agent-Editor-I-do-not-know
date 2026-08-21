@@ -44,6 +44,32 @@ class TestMeta(unittest.TestCase):
             self.assertTrue(re.match(r"^[A-Za-z_$][A-Za-z0-9_$]*$", rk),
                             f"{t} renderKey '{rk}' 非法")
 
+    def test_settings_endpoint_structure(self):
+        """/api/meta/settings：themes 非空，主题字段完整，字号/行距滑块元数据齐全"""
+        r = self.client.get("/api/meta/settings")
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.get_json()["success"])
+        data = r.get_json()["data"]
+        themes = data["themes"]
+        self.assertGreater(len(themes), 0, "应有主题")
+        keys = {t["key"] for t in themes}
+        self.assertIn("industrial", keys, "应有默认主题 industrial")
+        for t in themes:
+            for k in ("key", "name", "description"):
+                self.assertIn(k, t, f"主题 {t.get('key')} 缺 {k}")
+        fs = data["fontSizes"]
+        self.assertEqual((fs["min"], fs["max"], fs["default"]), (0.8, 1.2, 1.0))
+        lh = data["lineHeights"]
+        self.assertEqual((lh["min"], lh["max"], lh["default"]), (1.2, 2.2, 1.6))
+        self.assertGreater(fs["step"], 0)
+        self.assertGreater(lh["step"], 0)
+
+    def test_settings_route_registered(self):
+        """settings 路由应注册在应用上（与 components 同 app）"""
+        rules = {str(r) for r in self.app.url_map.iter_rules()}
+        self.assertIn("/api/meta/settings", rules)
+        self.assertIn("/api/meta/components", rules)
+
 
 if __name__ == "__main__":
     unittest.main()
