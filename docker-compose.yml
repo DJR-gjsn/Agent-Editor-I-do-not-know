@@ -1,0 +1,17 @@
+# Agent Editor — Docker Compose 部署
+# 用法：docker compose up -d --build  （首次访问 http://服务器IP:5000 注册账号）
+services:
+  agent-editor:
+    build: .
+    image: agent-editor:latest
+    container_name: agent-editor
+    ports:
+      - "5000:5000"
+    volumes:
+      # 数据持久化：SQLite(app.db)/项目/向量库/MCP 配置 都在 data/ 下
+      - ./data:/app/data
+    environment:
+      - FLASK_ENV=production
+      # LLM 密钥：建议通过 .env 或环境注入（不要写死进 compose）
+      # - LLM_API_KEY=sk-xxx
+    restart: unless-stopped

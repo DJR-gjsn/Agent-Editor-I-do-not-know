@@ -55,3 +55,5 @@ data/mcp_config.json
 # 用户认证数据库与用户项目目录
 data/app.db
 data/projects/*/
+
+# pip 临时目录（沙箱残留）.pip-tmp/

@@ -1,0 +1,22 @@
+# 运行时数据（卷挂载，不进镜像）
+data/
+
+# 构建/缓存产物
+build/
+dist/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# 开发/测试相关
+tests/
+test_components_auto.py
+*.log
+*.xlsx
+
+# 本地工具与交接
+.git/
+.gitignore
+.superpowers/
+docs/superpowers/
+PROJECT_BRIEF.md

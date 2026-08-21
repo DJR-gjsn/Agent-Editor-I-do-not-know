@@ -689,6 +689,7 @@ if __name__ == "__main__":
     # 设置 stdout 编码避免 Windows GBK 乱码
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
+if __name__ == "__main__":
     # 环境判断：FLASK_ENV=production 时使用生产模式
     is_debug = os.getenv("FLASK_ENV", "").lower() != "production"
 
