@@ -1,6 +1,6 @@
-"""前端元数据单一来源：组件定义/工具映射/分类/模板/厂商预设
+"""前端元数据单一来源：组件定义/工具映射/分类/模板/厂商预设/设置面板
 
-本文件由 tools/extract_meta.py 从 static/app.js 自动生成，请勿手改。
+数据最初由 tools/extract_meta.py 从 static/app.js 提取（该工具已退役），此后人工维护。
 """
 from flask import jsonify
 

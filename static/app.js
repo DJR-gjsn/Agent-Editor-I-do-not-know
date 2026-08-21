@@ -106,9 +106,6 @@ function findConnFrom(sourceCompId, sourcePortId) {
     const conn = STATE.connections.find(c => c.sourceCompId === sourceCompId && c.sourcePortId === sourcePortId);
     return conn ? { conn, target: STATE.components.find(x => x.id === conn.targetCompId) } : null;
 }
-function findConnectedComponent(compId, asTarget, portId) {
-    return asTarget ? findConnTo(compId, portId) : findConnFrom(compId, portId);
-}
 
 // 获取任意 LLM 的 API 配置
 function getLLMAPIConfig(preferredCompId) {
@@ -411,7 +408,10 @@ function applyMeta(data) {
     TOOL_NAME_MAP = data.tool_name_map || {};
     COMPONENT_CATEGORIES = data.component_categories || {};
     QUICK_TEMPLATES = data.quick_templates || [];
-    PROVIDERS = data.provider_presets || [];
+    // 厂商预设空兜底：至少保留"自定义"（防 renderAPIConfigTab 空数组崩溃）
+    PROVIDERS = (data.provider_presets && data.provider_presets.length > 0)
+        ? data.provider_presets
+        : [{ name: '自定义', url: '', models: [] }];
     // 分类筛选与面板重建依赖这些全局，重新初始化面板
     if (typeof setupPalletBadges === 'function') setupPalletBadges();
     if (typeof setupCategoryFilters === 'function') setupCategoryFilters();
@@ -825,6 +825,9 @@ function setupCategoryFilters() {
     const filterBar = document.getElementById('category-filters');
     const palletList = document.getElementById('pallet-list');
     if (!filterBar || !palletList) return;
+    // 幂等守卫：applyMeta 与 init 各调用一次，只绑一次监听
+    if (filterBar.dataset.filtersBound) return;
+    filterBar.dataset.filtersBound = '1';
 
     filterBar.querySelectorAll('.cat-filter-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -2139,16 +2142,13 @@ function renderAPIConfigTab(el, comp) {
     const syncBtn = el.querySelector(`#bsync-${comp.id}`);
 
     function saveActive() {
-        // 收集当前连线中的工具名
+        // 收集当前连线中的工具名（TOOL_NAME_MAP 由后端 /api/meta/components 填充，单一来源）
         const connectedTools = [];
         STATE.connections.filter(c => c.sourceCompId === comp.id).forEach(c => {
             const tgt = STATE.components.find(x => x.id === c.targetCompId);
             if (!tgt) return;
-            const toolMap = { web_search: 'web_search', calculator: 'calculator', code_executor: 'code_executor', text_tools: ['text_analyze', 'text_format'] };
-            if (toolMap[tgt.type]) {
-                if (Array.isArray(toolMap[tgt.type])) connectedTools.push(...toolMap[tgt.type]);
-                else connectedTools.push(toolMap[tgt.type]);
-            }
+            const tns = TOOL_NAME_MAP[tgt.type] || [];
+            if (tns.length) connectedTools.push(...tns);
         });
 
         const cfg = {
@@ -3088,11 +3088,6 @@ function isToolComponent(type) {
         'vector_memory',
     ];
     return toolTypes.includes(type);
-}
-
-// ── 判断是否为执行中介（可以承载工具连接）──
-function isExecutorComponent(type) {
-    return type === 'sequential_executor' || type === 'executor' || type === 'agent' || type === 'skills_manager';
 }
 
 // ── 判断是否为技能组件 ──
@@ -4980,309 +4975,12 @@ function renderConditionalPanel(container, comp) {
 }
 
 // ============================================================
-// Agent 预设模板系统
+// Agent 预设模板系统（模板数据由后端 /api/meta/components 的 quick_templates 下发）
 // ============================================================
-const AGENT_PRESETS = {
-    // ── Row 1: 经典 Agent 模板 ──
-    search: {
-        name: '🔍 搜索助手',
-        description: 'LLM + Agent + Web Search + URL Fetch + Text Tools + File Ops + Memory',
-        components: [
-            { type: 'llm', size: 5, x: 3, y: 3, apiSettings: { apiBase: 'https://api.deepseek.com/v1', apiKey: '', model: 'deepseek-chat', provider: 'DeepSeek' } },
-            { type: 'agent', size: 6, x: 3, y: 35 },
-            { type: 'web_search', size: 3, x: 55, y: 3, toolEnabled: true },
-            { type: 'url_fetch', size: 3, x: 72, y: 3, toolEnabled: true },
-            { type: 'text_tools', size: 3, x: 55, y: 28, toolEnabled: true },
-            { type: 'file_ops', size: 3, x: 72, y: 28, toolEnabled: true },
-            { type: 'memory', size: 3, x: 3, y: 73 },
-        ],
-        connections: [
-            { source: 0, sourcePort: 'llm-out', target: 1, targetPort: 'agent-llm-in' },
-            { source: 1, sourcePort: 'agent-tool-1', target: 2, targetPort: 'ws-in' },
-            { source: 1, sourcePort: 'agent-tool-2', target: 3, targetPort: 'uf-in' },
-            { source: 1, sourcePort: 'agent-tool-3', target: 4, targetPort: 'txt-in' },
-            { source: 1, sourcePort: 'agent-tool-4', target: 5, targetPort: 'fo-in' },
-            { source: 6, sourcePort: 'mem-out', target: 1, targetPort: 'agent-mem-in' },
-        ],
-    },
-    analyst: {
-        name: '📊 数据分析师',
-        description: 'LLM + Agent + Code + Excel + Calculator + Finance + HTTP 请求 + File Ops + Search + Memory',
-        components: [
-            { type: 'llm', size: 5, x: 3, y: 3, apiSettings: { apiBase: 'https://api.deepseek.com/v1', apiKey: '', model: 'deepseek-chat', provider: 'DeepSeek' } },
-            { type: 'agent', size: 6, x: 3, y: 35, agentPortCount: 6 },
-            { type: 'code_executor', size: 3, x: 55, y: 3, toolEnabled: true },
-            { type: 'mcp_excel', size: 3, x: 72, y: 3, toolEnabled: true },
-            { type: 'calculator', size: 3, x: 55, y: 28, toolEnabled: true },
-            { type: 'mcp_finance', size: 3, x: 72, y: 28, toolEnabled: true },
-            { type: 'file_ops', size: 3, x: 55, y: 53, toolEnabled: true },
-            { type: 'web_search', size: 3, x: 72, y: 53, toolEnabled: true },
-            { type: 'http_request', size: 3, x: 55, y: 76, toolEnabled: true },
-            { type: 'memory', size: 3, x: 3, y: 73 },
-        ],
-        connections: [
-            { source: 0, sourcePort: 'llm-out', target: 1, targetPort: 'agent-llm-in' },
-            { source: 1, sourcePort: 'agent-tool-1', target: 2, targetPort: 'code-in' },
-            { source: 1, sourcePort: 'agent-tool-2', target: 3, targetPort: 'excel-in' },
-            { source: 1, sourcePort: 'agent-tool-3', target: 4, targetPort: 'calc-in' },
-            { source: 1, sourcePort: 'agent-tool-4', target: 5, targetPort: 'fin-in' },
-            { source: 1, sourcePort: 'agent-tool-5', target: 6, targetPort: 'fo-in' },
-            { source: 1, sourcePort: 'agent-tool-6', target: 7, targetPort: 'ws-in' },
-            { source: 1, sourcePort: 'agent-tool-7', target: 8, targetPort: 'http-in' },
-            { source: 9, sourcePort: 'mem-out', target: 1, targetPort: 'agent-mem-in' },
-        ],
-    },
-    plan_exec: {
-        name: '🧠 计划-执行 Agent',
-        description: 'LLM + Plan 规划 -> Executor 执行 + Reflection 反思 + Memory',
-        components: [
-            { type: 'llm', size: 5, x: 3, y: 3, apiSettings: { apiBase: 'https://api.deepseek.com/v1', apiKey: '', model: 'deepseek-chat', provider: 'DeepSeek' } },
-            { type: 'plan', size: 5, x: 3, y: 38 },
-            { type: 'executor', size: 4, x: 50, y: 20 },
-            { type: 'web_search', size: 3, x: 50, y: 3, toolEnabled: true },
-            { type: 'code_executor', size: 3, x: 68, y: 3, toolEnabled: true },
-            { type: 'calculator', size: 3, x: 50, y: 50, toolEnabled: true },
-            { type: 'memory', size: 3, x: 3, y: 70 },
-            { type: 'reflection', size: 3, x: 68, y: 50 },
-        ],
-        connections: [
-            { source: 0, sourcePort: 'llm-out', target: 1, targetPort: 'plan-in' },
-            { source: 1, sourcePort: 'plan-out', target: 2, targetPort: 'exec-plan-in' },
-            { source: 0, sourcePort: 'llm-out', target: 2, targetPort: 'exec-llm-in' },
-            { source: 2, sourcePort: 'exec-tool-1', target: 3, targetPort: 'ws-in' },
-            { source: 2, sourcePort: 'exec-tool-2', target: 4, targetPort: 'code-in' },
-            { source: 2, sourcePort: 'exec-tool-3', target: 5, targetPort: 'calc-in' },
-            { source: 6, sourcePort: 'mem-out', target: 0, targetPort: 'llm-mem-in' },
-            { source: 1, sourcePort: 'plan-out', target: 7, targetPort: 'refl-plan-in' },
-            { source: 2, sourcePort: 'exec-tool-4', target: 7, targetPort: 'refl-exec-in' },
-        ],
-    },
-
-    // ── Row 2: Skills 技能模板（智能模式链路）──
-    doc_pro: {
-        name: '📝 文档专家',
-        description: 'LLM + Skill Auto Call + Skills Manager(Document) + Word + PDF + Search + 压缩交付 + Memory',
-        components: [
-            { type: 'llm', size: 5, x: 3, y: 3, apiSettings: { apiBase: 'https://api.deepseek.com/v1', apiKey: '', model: 'deepseek-chat', provider: 'DeepSeek' } },
-            { type: 'skill_auto_call', size: 4, x: 22, y: 3 },
-            { type: 'skills_manager', size: 5, x: 3, y: 35 },
-            { type: 'skill_document', size: 4, x: 55, y: 5, toolEnabled: true },
-            { type: 'web_search', size: 3, x: 72, y: 5, toolEnabled: true },
-            { type: 'mcp_word', size: 3, x: 55, y: 38, toolEnabled: true },
-            { type: 'mcp_pdf', size: 3, x: 72, y: 38, toolEnabled: true },
-            { type: 'mcp_zip', size: 3, x: 55, y: 63, toolEnabled: true },
-            { type: 'memory', size: 3, x: 3, y: 73 },
-        ],
-        connections: [
-            { source: 0, sourcePort: 'llm-out', target: 1, targetPort: 'auto-llm-in' },
-            { source: 1, sourcePort: 'auto-skm-out', target: 2, targetPort: 'skm-llm-in' },
-            { source: 2, sourcePort: 'skm-skill-1', target: 3, targetPort: 'skill-in' },
-            { source: 0, sourcePort: 'llm-out', target: 4, targetPort: 'ws-in' },
-            { source: 0, sourcePort: 'llm-out', target: 5, targetPort: 'word-in' },
-            { source: 0, sourcePort: 'llm-out', target: 6, targetPort: 'pdf-in' },
-            { source: 0, sourcePort: 'llm-out', target: 7, targetPort: 'zip-in' },
-            { source: 8, sourcePort: 'mem-out', target: 0, targetPort: 'llm-mem-in' },
-        ],
-    },
-    design_pro: {
-        name: '🎨 设计专家',
-        description: 'LLM + Skill Auto Call + Skills Manager(Frontend + UI/UX) + Search + 图片工具 + Memory',
-        components: [
-            { type: 'llm', size: 5, x: 3, y: 3, apiSettings: { apiBase: 'https://api.deepseek.com/v1', apiKey: '', model: 'deepseek-chat', provider: 'DeepSeek' } },
-            { type: 'skill_auto_call', size: 4, x: 22, y: 3 },
-            { type: 'skills_manager', size: 5, x: 3, y: 38 },
-            { type: 'skill_frontend', size: 4, x: 50, y: 5, toolEnabled: true },
-            { type: 'skill_uiux', size: 4, x: 68, y: 5, toolEnabled: true },
-            { type: 'web_search', size: 3, x: 50, y: 45, toolEnabled: true },
-            { type: 'url_fetch', size: 3, x: 68, y: 45, toolEnabled: true },
-            { type: 'image_tools', size: 3, x: 50, y: 68, toolEnabled: true },
-            { type: 'memory', size: 3, x: 3, y: 73 },
-        ],
-        connections: [
-            { source: 0, sourcePort: 'llm-out', target: 1, targetPort: 'auto-llm-in' },
-            { source: 1, sourcePort: 'auto-skm-out', target: 2, targetPort: 'skm-llm-in' },
-            { source: 2, sourcePort: 'skm-skill-1', target: 3, targetPort: 'skill-in' },
-            { source: 2, sourcePort: 'skm-skill-2', target: 4, targetPort: 'skill-in' },
-            { source: 0, sourcePort: 'llm-out', target: 5, targetPort: 'ws-in' },
-            { source: 0, sourcePort: 'llm-out', target: 6, targetPort: 'uf-in' },
-            { source: 0, sourcePort: 'llm-out', target: 7, targetPort: 'img-in' },
-            { source: 8, sourcePort: 'mem-out', target: 0, targetPort: 'llm-mem-in' },
-        ],
-    },
-    skill_forge: {
-        name: '⚡ 技能工坊',
-        description: 'LLM + Skill Auto Call + Skills Manager(Find + Creator + Superpowers) + Search + Memory',
-        components: [
-            { type: 'llm', size: 5, x: 3, y: 3, apiSettings: { apiBase: 'https://api.deepseek.com/v1', apiKey: '', model: 'deepseek-chat', provider: 'DeepSeek' } },
-            { type: 'skill_auto_call', size: 4, x: 22, y: 3 },
-            { type: 'skills_manager', size: 5, x: 3, y: 38 },
-            { type: 'skill_find', size: 4, x: 50, y: 3, toolEnabled: true },
-            { type: 'skill_creator', size: 4, x: 68, y: 3, toolEnabled: true },
-            { type: 'skill_super', size: 4, x: 50, y: 38, toolEnabled: true },
-            { type: 'web_search', size: 3, x: 68, y: 38, toolEnabled: true },
-            { type: 'memory', size: 3, x: 3, y: 73 },
-        ],
-        connections: [
-            { source: 0, sourcePort: 'llm-out', target: 1, targetPort: 'auto-llm-in' },
-            { source: 1, sourcePort: 'auto-skm-out', target: 2, targetPort: 'skm-llm-in' },
-            { source: 2, sourcePort: 'skm-skill-1', target: 3, targetPort: 'skill-in' },
-            { source: 2, sourcePort: 'skm-skill-2', target: 4, targetPort: 'skill-in' },
-            { source: 2, sourcePort: 'skm-skill-3', target: 5, targetPort: 'skill-in' },
-            { source: 0, sourcePort: 'llm-out', target: 6, targetPort: 'ws-in' },
-            { source: 7, sourcePort: 'mem-out', target: 0, targetPort: 'llm-mem-in' },
-        ],
-    },
-
-    // ── Row 3: 专业场景模板 ──
-    dev_kit: {
-        name: '🛠️ 开发工具包',
-        description: 'LLM + Agent + Git + Database + Code + System + Encoding + HTTP 请求 + 压缩 + File Ops + Memory',
-        components: [
-            { type: 'llm', size: 5, x: 3, y: 3, apiSettings: { apiBase: 'https://api.deepseek.com/v1', apiKey: '', model: 'deepseek-chat', provider: 'DeepSeek' } },
-            { type: 'agent', size: 6, x: 3, y: 35, agentPortCount: 7 },
-            { type: 'mcp_git', size: 3, x: 55, y: 3, toolEnabled: true },
-            { type: 'mcp_database', size: 3, x: 72, y: 3, toolEnabled: true },
-            { type: 'code_executor', size: 3, x: 55, y: 28, toolEnabled: true },
-            { type: 'mcp_system', size: 3, x: 72, y: 28, toolEnabled: true },
-            { type: 'mcp_encoding', size: 3, x: 55, y: 53, toolEnabled: true },
-            { type: 'file_ops', size: 3, x: 72, y: 53, toolEnabled: true },
-            { type: 'http_request', size: 3, x: 55, y: 76, toolEnabled: true },
-            { type: 'mcp_zip', size: 3, x: 72, y: 76, toolEnabled: true },
-            { type: 'memory', size: 3, x: 3, y: 73 },
-        ],
-        connections: [
-            { source: 0, sourcePort: 'llm-out', target: 1, targetPort: 'agent-llm-in' },
-            { source: 1, sourcePort: 'agent-tool-1', target: 2, targetPort: 'git-in' },
-            { source: 1, sourcePort: 'agent-tool-2', target: 3, targetPort: 'db-in' },
-            { source: 1, sourcePort: 'agent-tool-3', target: 4, targetPort: 'code-in' },
-            { source: 1, sourcePort: 'agent-tool-4', target: 5, targetPort: 'sys-in' },
-            { source: 1, sourcePort: 'agent-tool-5', target: 6, targetPort: 'enc-in' },
-            { source: 1, sourcePort: 'agent-tool-6', target: 7, targetPort: 'fo-in' },
-            { source: 1, sourcePort: 'agent-tool-7', target: 8, targetPort: 'http-in' },
-            { source: 1, sourcePort: 'agent-tool-8', target: 9, targetPort: 'zip-in' },
-            { source: 10, sourcePort: 'mem-out', target: 1, targetPort: 'agent-mem-in' },
-        ],
-    },
-    research: {
-        name: '🔬 深度研究',
-        description: 'LLM + Skill Auto Call + Skills Manager(Find) + Agent + Search + URL Fetch + PDF + Translate + 压缩 + Memory',
-        components: [
-            { type: 'llm', size: 6, x: 3, y: 3, apiSettings: { apiBase: 'https://api.deepseek.com/v1', apiKey: '', model: 'deepseek-chat', provider: 'DeepSeek' } },
-            { type: 'skill_auto_call', size: 4, x: 22, y: 3 },
-            { type: 'skills_manager', size: 4, x: 50, y: 3 },
-            { type: 'skill_find', size: 3, x: 70, y: 3, toolEnabled: true },
-            { type: 'agent', size: 6, x: 3, y: 35, agentPortCount: 5 },
-            { type: 'web_search', size: 3, x: 55, y: 45, toolEnabled: true },
-            { type: 'url_fetch', size: 3, x: 72, y: 45, toolEnabled: true },
-            { type: 'mcp_pdf', size: 3, x: 55, y: 70, toolEnabled: true },
-            { type: 'mcp_translate', size: 3, x: 72, y: 70, toolEnabled: true },
-            { type: 'mcp_zip', size: 3, x: 55, y: 88, toolEnabled: true },
-            { type: 'memory', size: 3, x: 3, y: 73 },
-        ],
-        connections: [
-            { source: 0, sourcePort: 'llm-out', target: 1, targetPort: 'auto-llm-in' },
-            { source: 1, sourcePort: 'auto-skm-out', target: 2, targetPort: 'skm-llm-in' },
-            { source: 2, sourcePort: 'skm-skill-1', target: 3, targetPort: 'skill-in' },
-            { source: 0, sourcePort: 'llm-out', target: 4, targetPort: 'agent-llm-in' },
-            { source: 4, sourcePort: 'agent-tool-1', target: 5, targetPort: 'ws-in' },
-            { source: 4, sourcePort: 'agent-tool-2', target: 6, targetPort: 'uf-in' },
-            { source: 4, sourcePort: 'agent-tool-3', target: 7, targetPort: 'pdf-in' },
-            { source: 4, sourcePort: 'agent-tool-4', target: 8, targetPort: 'tr-in' },
-            { source: 4, sourcePort: 'agent-tool-5', target: 9, targetPort: 'zip-in' },
-            { source: 10, sourcePort: 'mem-out', target: 0, targetPort: 'llm-mem-in' },
-        ],
-    },
-    office: {
-        name: '🏢 办公套件',
-        description: 'LLM + Agent + Word + Excel + PPT + PDF + Email + Calendar + 压缩交付 + Memory',
-        components: [
-            { type: 'llm', size: 5, x: 3, y: 3, apiSettings: { apiBase: 'https://api.deepseek.com/v1', apiKey: '', model: 'deepseek-chat', provider: 'DeepSeek' } },
-            { type: 'agent', size: 6, x: 3, y: 35, agentPortCount: 6 },
-            { type: 'mcp_word', size: 3, x: 55, y: 3, toolEnabled: true },
-            { type: 'mcp_excel', size: 3, x: 72, y: 3, toolEnabled: true },
-            { type: 'mcp_ppt', size: 3, x: 55, y: 28, toolEnabled: true },
-            { type: 'mcp_pdf', size: 3, x: 72, y: 28, toolEnabled: true },
-            { type: 'mcp_email', size: 3, x: 55, y: 53, toolEnabled: true },
-            { type: 'mcp_calendar', size: 3, x: 72, y: 53, toolEnabled: true },
-            { type: 'mcp_zip', size: 3, x: 55, y: 76, toolEnabled: true },
-            { type: 'memory', size: 3, x: 3, y: 73 },
-        ],
-        connections: [
-            { source: 0, sourcePort: 'llm-out', target: 1, targetPort: 'agent-llm-in' },
-            { source: 1, sourcePort: 'agent-tool-1', target: 2, targetPort: 'word-in' },
-            { source: 1, sourcePort: 'agent-tool-2', target: 3, targetPort: 'excel-in' },
-            { source: 1, sourcePort: 'agent-tool-3', target: 4, targetPort: 'ppt-in' },
-            { source: 1, sourcePort: 'agent-tool-4', target: 5, targetPort: 'pdf-in' },
-            { source: 1, sourcePort: 'agent-tool-5', target: 6, targetPort: 'email-in' },
-            { source: 1, sourcePort: 'agent-tool-6', target: 7, targetPort: 'cal-in' },
-            { source: 1, sourcePort: 'agent-tool-7', target: 8, targetPort: 'zip-in' },
-            { source: 9, sourcePort: 'mem-out', target: 1, targetPort: 'agent-mem-in' },
-        ],
-    },
-
-    // ── Row 4: PUA + Full Agent ──
-    pua_coach: {
-        name: '🔥 PUA 高压教练',
-        description: 'LLM + Skill Auto Call + Skills Manager(PUA) + Search + Code + Calc + File Ops + Encoding + Memory',
-        components: [
-            { type: 'llm', size: 5, x: 3, y: 3, apiSettings: { apiBase: 'https://api.deepseek.com/v1', apiKey: '', model: 'deepseek-chat', provider: 'DeepSeek' } },
-            { type: 'skill_auto_call', size: 4, x: 22, y: 3 },
-            { type: 'skills_manager', size: 5, x: 3, y: 38 },
-            { type: 'skill_pua', size: 4, x: 55, y: 5, toolEnabled: true },
-            { type: 'web_search', size: 3, x: 72, y: 5, toolEnabled: true },
-            { type: 'code_executor', size: 3, x: 55, y: 38, toolEnabled: true },
-            { type: 'calculator', size: 3, x: 72, y: 38, toolEnabled: true },
-            { type: 'file_ops', size: 3, x: 55, y: 63, toolEnabled: true },
-            { type: 'mcp_encoding', size: 3, x: 72, y: 63, toolEnabled: true },
-            { type: 'memory', size: 3, x: 3, y: 73 },
-        ],
-        connections: [
-            { source: 0, sourcePort: 'llm-out', target: 1, targetPort: 'auto-llm-in' },
-            { source: 1, sourcePort: 'auto-skm-out', target: 2, targetPort: 'skm-llm-in' },
-            { source: 2, sourcePort: 'skm-skill-1', target: 3, targetPort: 'skill-in' },
-            { source: 0, sourcePort: 'llm-out', target: 4, targetPort: 'ws-in' },
-            { source: 0, sourcePort: 'llm-out', target: 5, targetPort: 'code-in' },
-            { source: 0, sourcePort: 'llm-out', target: 6, targetPort: 'calc-in' },
-            { source: 0, sourcePort: 'llm-out', target: 7, targetPort: 'fo-in' },
-            { source: 0, sourcePort: 'llm-out', target: 8, targetPort: 'enc-in' },
-            { source: 9, sourcePort: 'mem-out', target: 0, targetPort: 'llm-mem-in' },
-        ],
-    },
-    full_agent: {
-        name: '🤖 全能 Agent',
-        description: 'LLM + Agent + Search + Code + Calc + Excel + Word + PDF + HTTP + 图片 + 压缩 + Memory + Reflection',
-        components: [
-            { type: 'llm', size: 6, x: 3, y: 3, apiSettings: { apiBase: 'https://api.deepseek.com/v1', apiKey: '', model: 'deepseek-chat', provider: 'DeepSeek' } },
-            { type: 'agent', size: 6, x: 3, y: 38, agentPortCount: 9 },
-            { type: 'web_search', size: 3, x: 50, y: 3, toolEnabled: true },
-            { type: 'code_executor', size: 3, x: 68, y: 3, toolEnabled: true },
-            { type: 'calculator', size: 3, x: 50, y: 28, toolEnabled: true },
-            { type: 'mcp_excel', size: 3, x: 68, y: 28, toolEnabled: true },
-            { type: 'mcp_word', size: 3, x: 50, y: 53, toolEnabled: true },
-            { type: 'mcp_pdf', size: 3, x: 68, y: 53, toolEnabled: true },
-            { type: 'http_request', size: 3, x: 50, y: 76, toolEnabled: true },
-            { type: 'image_tools', size: 3, x: 68, y: 76, toolEnabled: true },
-            { type: 'mcp_zip', size: 3, x: 50, y: 90, toolEnabled: true },
-            { type: 'memory', size: 3, x: 3, y: 73 },
-            { type: 'reflection', size: 3, x: 30, y: 73 },
-        ],
-        connections: [
-            { source: 0, sourcePort: 'llm-out', target: 1, targetPort: 'agent-llm-in' },
-            { source: 1, sourcePort: 'agent-tool-1', target: 2, targetPort: 'ws-in' },
-            { source: 1, sourcePort: 'agent-tool-2', target: 3, targetPort: 'code-in' },
-            { source: 1, sourcePort: 'agent-tool-3', target: 4, targetPort: 'calc-in' },
-            { source: 1, sourcePort: 'agent-tool-4', target: 5, targetPort: 'excel-in' },
-            { source: 1, sourcePort: 'agent-tool-5', target: 6, targetPort: 'word-in' },
-            { source: 1, sourcePort: 'agent-tool-6', target: 7, targetPort: 'pdf-in' },
-            { source: 1, sourcePort: 'agent-tool-7', target: 8, targetPort: 'http-in' },
-            { source: 1, sourcePort: 'agent-tool-8', target: 9, targetPort: 'img-in' },
-            { source: 1, sourcePort: 'agent-tool-9', target: 10, targetPort: 'zip-in' },
-            { source: 11, sourcePort: 'mem-out', target: 1, targetPort: 'agent-mem-in' },
-        ],
-    },
-};
 function loadAgentPreset(presetName) {
-    const preset = AGENT_PRESETS[presetName];
+    // 按键（与 index.html preset-btn 的 data-preset 对应）在 QUICK_TEMPLATES 中查找；
+    // 元数据拉取失败时为空数组 → no-op
+    const preset = QUICK_TEMPLATES.find(t => t.key === presetName);
     if (!preset) return;
 
     // 确认覆盖
@@ -5533,17 +5231,6 @@ async function loadMemoryFromBackend(llmComp) {
         console.warn('加载后端记忆失败:', e);
     }
     return null;
-}
-
-// ── 获取所有后端会话列表 ──
-async function listBackendSessions() {
-    try {
-        const resp = await fetch('/api/memory/sessions');
-        const data = await resp.json();
-        return data.success ? data.sessions : [];
-    } catch (e) {
-        return [];
-    }
 }
 
 // Web Search 面板（AI 驱动，纯展示）

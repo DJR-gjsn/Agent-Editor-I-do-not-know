@@ -1,27 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""从 static/app.js 提取前端元数据，生成 modules/meta.py 的数据部分。
+"""【已退役】本工具不再可用，仅保留存档参考。
 
-提取方法（本机已确认 node v24.18.0 可用，走 Node 路径）：
-1. 首选 Node.js：把 JS 对象/数组字面量原样交给 `node -e` 求值
-   （eval + JSON.stringify，文件 IO 传递，不依赖 piped stdio）。
-2. 无 Node 时回退：Python 括号配对 + JS→JSON 兼容子集转换
-   （单引号/注释/尾逗号/\\u{XXXX}/未引号 key）。
-   回退结果会在本机与 Node 输出做一致性自检（--force-python 强制走回退路径）。
+退役原因（Task 5，2026-08-18 前端轻量化重构）：
+- 其提取的 const 字面量（COMPONENT_DEFS / TOOL_NAME_MAP / COMPONENT_CATEGORIES /
+  AGENT_PRESETS / API_PROVIDERS）已全部从 static/app.js 删除，改为后端下发
+  （modules/meta.py 的 _DATA，见 /api/meta/components）。
+- 若直接运行会因 extract_literal 找不到字面量而 raise。
+- modules/meta.py 现为人工维护（头部声明已更正）。
 
-数据来源（全部位于 static/app.js）：
-- COMPONENT_DEFS（254-734 行）：组件定义，render: renderXxxPanel 引用 →
-  renderKey 字符串（render 字段是函数引用或工厂调用，取 render\\w+ 函数名）。
-- TOOL_NAME_MAP（129-155 行）：组件类型 → 工具名列表。
-- COMPONENT_CATEGORIES（1119-1184 行）：组件类型 → [分类名, css 类]。
-- AGENT_PRESETS（5849-6147 行）：快速模板布局数据（name/description/components/connections），
-  与 templates/index.html 的"⭐ 快速模板"按钮（data-preset）一一对应。
-- API_PROVIDERS（8351-8361 行）：getAllProviders() 的静态 return 数组
-  （getAllProviders 本身 return [...API_PROVIDERS, ...loadCustomProviders()]，
-  loadCustomProviders 是 localStorage 运行时数据，不可静态提取，故取静态部分）。
-
-用法：
-    python tools/extract_meta.py [--force-python]
+若未来需要再生成，请先恢复上述 const 字面量或改写提取来源。
 """
 import json
 import re
