@@ -5,7 +5,8 @@ cd /d "%~dp0"
 title Agent Editor Server
 
 echo ============================================
-echo   Agent Editor V0.1 - Server Launcher
+echo   Agent Editor - Server Launcher
+echo   (需登录：首次使用请注册账号)
 echo ============================================
 echo.
 
