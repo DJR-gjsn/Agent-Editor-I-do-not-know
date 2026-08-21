@@ -34,6 +34,23 @@ MEMORY_LOAD = API + "/api/memory/load"
 DEFAULT_PROJECT = "data/projects/proj_7142edabd6.json"
 
 # ============================================================
+# 登录（全局登录保护：所有 /api/* 需会话 cookie）
+# ============================================================
+SESSION = requests.Session()
+
+
+def login():
+    """登录获取会话 cookie。账号取环境变量 TEST_USER/TEST_PASS，默认 djr/123456。"""
+    user = os.environ.get("TEST_USER", "djr")
+    pwd = os.environ.get("TEST_PASS", "123456")
+    resp = SESSION.post(API + "/api/auth/login",
+                        json={"username": user, "password": pwd}, timeout=10)
+    if resp.status_code != 200:
+        print(f"[X] 登录失败（{user}）: {resp.text[:120]}")
+        sys.exit(1)
+    print(f"[OK] 已登录: {user}")
+
+# ============================================================
 # 工具映射（与 static/app.js 的 TOOL_NAME_MAP 保持一致）
 # ============================================================
 TOOL_NAME_MAP = {
@@ -78,7 +95,7 @@ ORCH_PORT_PREFIX = {
 # 每个组件类型的真实测试 prompt
 # ============================================================
 TEST_PROMPTS = {
-    "web_search": "搜索 Python 3.14 最新版本的信息",
+    "web_search": "请调用 web_search 工具搜索一次 Python 3.14 的最新版本信息，然后直接根据搜索结果回答，不要再重复搜索",
     "calculator": "计算 123*456 的结果",
     "time_query": "现在是什么时间？",
     "url_fetch": "抓取 https://httpbin.org/json 的内容",
@@ -241,30 +258,33 @@ def chat_test(api_base, api_key, model, tools, prompt, smart_mode=False, availab
         payload["smart_mode"] = True
         payload["available_skills"] = [{"id": s, "name": s} for s in (available_skills or [])]
 
-    resp = requests.post(CHAT, json=payload, timeout=120)
+    resp = SESSION.post(CHAT, json=payload, timeout=120, stream=True)
     calls, results, errors, content = [], [], [], ""
-    for line in resp.text.split("\n"):
-        if not line.startswith("data: "):
-            continue
-        ds = line[6:]
-        if ds == "[DONE]":
-            break
-        try:
-            d = json.loads(ds)
-        except json.JSONDecodeError:
-            continue
-        if d.get("error"):
-            errors.append(d["error"])
-        if d.get("tool_calls"):
-            for tc in d["tool_calls"]:
-                calls.append({"name": tc.get("name", ""), "args": tc.get("arguments", "")[:200]})
-        if d.get("tool_result"):
-            tr = d["tool_result"]
-            results.append({"name": tr.get("name", ""), "result": tr.get("result", "")[:400]})
-        if d.get("choices"):
-            c = d["choices"][0].get("delta", {}).get("content", "")
-            if c:
-                content += c
+    try:
+        for line in resp.iter_lines(decode_unicode=True):
+            if not line or not line.startswith("data: "):
+                continue
+            ds = line[6:]
+            if ds == "[DONE]":
+                break
+            try:
+                d = json.loads(ds)
+            except json.JSONDecodeError:
+                continue
+            if d.get("error"):
+                errors.append(d["error"])
+            if d.get("tool_calls"):
+                for tc in d["tool_calls"]:
+                    calls.append({"name": tc.get("name", ""), "args": tc.get("arguments", "")[:200]})
+            if d.get("tool_result"):
+                tr = d["tool_result"]
+                results.append({"name": tr.get("name", ""), "result": tr.get("result", "")[:400]})
+            if d.get("choices"):
+                c = d["choices"][0].get("delta", {}).get("content", "")
+                if c:
+                    content += c
+    finally:
+        resp.close()
     return calls, results, errors, content
 
 
@@ -296,13 +316,13 @@ def test_memory_component(api_base, api_key, model):
     session_id = f"auto_test_{int(time.time())}"
     pid = "default"
     try:
-        r1 = requests.post(MEMORY_SAVE, json={
+        r1 = SESSION.post(MEMORY_SAVE, json={
             "session_id": session_id, "project_id": pid,
             "messages": [{"role": "user", "content": "测试记忆"},
                          {"role": "assistant", "content": "记忆已保存"}],
         }, timeout=30)
         ok1 = r1.status_code == 200
-        r2 = requests.get(f"{MEMORY_LOAD}/{session_id}?project_id={pid}", timeout=30)
+        r2 = SESSION.get(f"{MEMORY_LOAD}/{session_id}?project_id={pid}", timeout=30)
         ok2 = r2.status_code == 200
         if ok1 and ok2:
             data = r2.json()
@@ -316,8 +336,16 @@ def test_memory_component(api_base, api_key, model):
 
 
 def main():
+    login()
     projects = sys.argv[1:] or [DEFAULT_PROJECT]
     all_results = []
+    # 工具定义索引（缓存一次，避免每组件重复请求与连接池堆积）
+    _tool_index = {}
+    # 组件过滤：TEST_TYPES="skill_frontend,skill_pua" 只测指定类型（分块调试用）
+    type_filter = None
+    _tf = os.environ.get("TEST_TYPES", "").strip()
+    if _tf:
+        type_filter = set(t.strip() for t in _tf.split(",") if t.strip())
 
     for proj_path in projects:
         comps, conns = load_project(proj_path)
@@ -329,6 +357,8 @@ def main():
 
         for comp in sorted(comps, key=lambda c: c["id"]):
             cid, ctype = comp["id"], comp["type"]
+            if type_filter and ctype not in type_filter:
+                continue
             print(f"  [{cid}] {ctype} ... ", end="", flush=True)
 
             # meta 组件
@@ -358,9 +388,11 @@ def main():
                 print("[SKIP]")
                 continue
 
-            # 构建 OpenAI tools 数组
-            tool_defs = requests.get(API + "/api/tools/definitions", timeout=30).json()
-            tool_index = {t["function"]["name"]: t for t in tool_defs}
+            # 构建 OpenAI tools 数组（工具定义缓存一次，避免每组件重复请求与连接池堆积）
+            if not _tool_index:
+                _tool_defs = SESSION.get(API + "/api/tools/definitions", timeout=60).json()
+                _tool_index.update({t["function"]["name"]: t for t in _tool_defs})
+            tool_index = _tool_index
 
             # 技能组件：智能模式
             if ctype.startswith("skill_"):
