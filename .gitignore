@@ -49,8 +49,6 @@ Desktop.ini
 # ─── 例外：docs/ 下的文档表格随仓库发布 ───
 !docs/*.xlsx
 
-# 项目简报（本地交接用，不发布）
-PROJECT_BRIEF.md
 # MCP server 配置（可能含 token，仅存本地）
 data/mcp_config.json
 
