@@ -167,6 +167,7 @@ function serializeComponent(c) {
         // 密钥仅保留在组件内存与浏览器 localStorage 的 active-llm-config 中
         apiSettings: c.apiSettings ? {
             apiBase: c.apiSettings.apiBase,
+            apiKey: c.apiSettings.apiKey,        // 随项目保存（data/ 已 gitignored 不进 git）
             model: c.apiSettings.model,
             provider: c.apiSettings.provider,
             maxToolRounds: c.apiSettings.maxToolRounds || 50,
@@ -176,6 +177,7 @@ function serializeComponent(c) {
         visionImage: c.visionImage, visionPrompt: c.visionPrompt,
         searchHistory: c.searchHistory, toolEnabled: c.toolEnabled,
         maxSearchRounds: c.maxSearchRounds,
+        maxResults: c.maxResults,
         calcHistory: c.calcHistory, codeHistory: c.codeHistory, textHistory: c.textHistory,
         orderedTools: c.orderedTools, strictMode: c.strictMode,
         currentPlan: c.currentPlan, planHistory: c.planHistory,
@@ -206,6 +208,7 @@ function deserializeComponent(cd, fallbackIndex) {
         visionImage: cd.visionImage || null, visionPrompt: cd.visionPrompt || null,
         searchHistory: cd.searchHistory || [], toolEnabled: cd.toolEnabled !== undefined ? cd.toolEnabled : true,
         maxSearchRounds: cd.maxSearchRounds,
+        maxResults: cd.maxResults,
         calcHistory: cd.calcHistory || [], codeHistory: cd.codeHistory || [], textHistory: cd.textHistory || [],
         orderedTools: cd.orderedTools || [], strictMode: cd.strictMode !== undefined ? cd.strictMode : true,
         currentPlan: cd.currentPlan || null, planHistory: cd.planHistory || [],
@@ -2436,6 +2439,8 @@ function renderChatTab(el, comp) {
                 apiBase: comp.apiSettings.apiBase,
                 model: comp.apiSettings.model,
                 maxToolRounds: comp.apiSettings.maxToolRounds,
+                maxSearchRounds: comp.maxSearchRounds,
+                maxResults: comp.maxResults,
             },
         };
         let full = '';
@@ -5262,6 +5267,7 @@ function renderWebSearchPanel(container, comp) {
         comp.maxSearchRounds = 10;
         safeStorage.set('wybzd-max-search-rounds', 10);
     }
+    if (comp.maxResults == null) comp.maxResults = 10;
     container.className = 'module-panel';
     container.innerHTML = `
         <div class="tool-toggle-row">
@@ -5276,6 +5282,12 @@ function renderWebSearchPanel(container, comp) {
             <input id="sr-${comp.id}" type="number" min="1" max="50" value="${comp.maxSearchRounds}"
                    style="width:50px;padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:4px;background:var(--bg-input);color:var(--text);text-align:center;">
             <button id="srcfm-${comp.id}" class="module-btn primary" style="font-size:11px;padding:4px 10px;">确认</button>
+        </div>
+        <div class="search-rounds-row" style="margin:8px 0;display:flex;align-items:center;gap:6px;">
+            <label for="mr-${comp.id}" style="font-size:11px;color:var(--text-muted);white-space:nowrap;">📄 单次结果条数</label>
+            <input id="mr-${comp.id}" type="number" min="1" max="50" value="${comp.maxResults}"
+                   style="width:50px;padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:4px;background:var(--bg-input);color:var(--text);text-align:center;">
+            <button id="mrcfm-${comp.id}" class="module-btn primary" style="font-size:11px;padding:4px 10px;">确认</button>
         </div>
         <div class="engine-order-section" id="eos-${comp.id}">
             <div class="engine-order-header">🔀 搜索引擎优先级</div>
@@ -5314,6 +5326,27 @@ function renderWebSearchPanel(container, comp) {
                 srCfmBtn.textContent = '确认';
                 srCfmBtn.style.background = '';
                 srCfmBtn.style.borderColor = '';
+            }, 800);
+        });
+    }
+
+    // 单次结果条数 — 点击确认后生效（随布局保存、随对话发送）
+    const mrInput = container.querySelector(`#mr-${comp.id}`);
+    const mrCfmBtn = container.querySelector(`#mrcfm-${comp.id}`);
+    if (mrInput && mrCfmBtn) {
+        mrCfmBtn.addEventListener('click', () => {
+            let val = parseInt(mrInput.value) || 10;
+            val = Math.max(1, Math.min(50, val));
+            comp.maxResults = val;
+            mrInput.value = val;
+            autoSaveConnections();
+            mrCfmBtn.textContent = '✓';
+            mrCfmBtn.style.background = '#52c41a';
+            mrCfmBtn.style.borderColor = '#52c41a';
+            setTimeout(() => {
+                mrCfmBtn.textContent = '确认';
+                mrCfmBtn.style.background = '';
+                mrCfmBtn.style.borderColor = '';
             }, 800);
         });
     }

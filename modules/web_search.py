@@ -34,7 +34,7 @@ WEB_SEARCH_DEFINITION = {
             },
             "max_results": {
                 "type": "integer",
-                "description": "返回结果数量，默认 5，最大 10",
+                "description": "返回结果数量，默认 5，最大 50",
                 "default": 5,
             },
             "time_range": {
@@ -94,7 +94,7 @@ def _get_sogou_session():
 def execute_web_search(args: dict) -> str:
     """AI 调用的搜索执行器"""
     query = (args.get("query") or "").strip()
-    max_results = min(int(args.get("max_results", 5)), 10)
+    max_results = min(int(args.get("max_results", 5)), 50)
     time_range = args.get("time_range", "auto")
 
     if not query:
@@ -127,7 +127,7 @@ def register_routes(app, http_session=None):
     def web_search():
         data = request.get_json(force=True)
         query = (data.get("query") or "").strip()
-        max_results = min(int(data.get("max_results", 5)), 20)
+        max_results = min(int(data.get("max_results", 5)), 50)
         time_range = data.get("time_range", "auto")
 
         if not query:

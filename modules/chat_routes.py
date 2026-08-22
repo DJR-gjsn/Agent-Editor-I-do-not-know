@@ -162,6 +162,13 @@ def register_chat_routes(app, http_session, cfg):
             data["max_tool_rounds"] = (llm_cfg.get("maxToolRounds")
                                        or llm_cfg.get("max_tool_rounds")
                                        or data.get("max_tool_rounds") or 50)
+            # 组件配置：搜索轮数上限 / 单次结果条数（由 Web Search 组件面板确定）
+            data["max_search_rounds"] = (llm_cfg.get("maxSearchRounds")
+                                         or llm_cfg.get("max_search_rounds")
+                                         or data.get("max_search_rounds") or 10)
+            data["max_results"] = (llm_cfg.get("maxResults")
+                                   or llm_cfg.get("max_results")
+                                   or data.get("max_results"))
             # compose_messages 已把 system 消息放 messages[0]（组件人设）
             # → 标记避免默认 system_prompt 覆盖组件内容
             if (payload["messages"]
@@ -181,6 +188,11 @@ def register_chat_routes(app, http_session, cfg):
         date_hint = f"\n\n[当前日期: {today_str}]"
         session_hint = f"\n[session_id: {session_id}] — 调用任何 Office 工具时请使用此 session_id"
         sys_prompt = data.get("system_prompt") or _cfg.get("system_prompt", "")
+        # 组件配置提示：Web Search 组件面板设置的单次结果条数（max_results）
+        max_results = data.get("max_results")
+        if max_results:
+            date_hint += (f"\n[搜索设置: 调用 web_search 工具时请将 max_results 设为 {max_results}"
+                          f"（默认 {max_results} 条结果）]")
         if data.get("_sys_prompt_injected"):
             # 新格式：system 消息已由 orchestrator 注入（组件人设）→ 只追加日期/session 提示
             final_messages = _append_sys_hints(messages, date_hint + session_hint)
