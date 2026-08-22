@@ -357,6 +357,50 @@ class TestOrchestrator(unittest.TestCase):
         self.assertEqual(orchestrator.resolve_tools(layout, "llm1"),
                          ["calculator"])
 
+    # ── 重构遗漏修复：json_mode response_format / function_calling 自定义 tools ──
+    def test_json_mode_response_format(self):
+        layout = _layout(
+            [{"id": "llm1", "type": "llm"},
+             {"id": "jm", "type": "json_mode",
+              "jsonSchema": {"type": "object",
+                             "properties": {"answer": {"type": "string"}}}}],
+            [{"sourceCompId": "llm1", "sourcePortId": "llm-out",
+              "targetCompId": "jm", "targetPortId": "in"}])
+        payload = orchestrator.build_payload(layout, "llm1", "hi", {})
+        rf = payload.get("response_format")
+        self.assertIsNotNone(rf)
+        self.assertEqual(rf["type"], "json_schema")
+        self.assertEqual(rf["json_schema"]["schema"]["properties"]["answer"]["type"], "string")
+
+    def test_function_calling_custom_tools(self):
+        layout = _layout(
+            [{"id": "llm1", "type": "llm"},
+             {"id": "fc", "type": "function_calling",
+              "tools": [{"name": "my_custom_tool", "description": "自定义",
+                         "parameters": {"type": "object", "properties": {}}}]},
+             {"id": "tt", "type": "text_tools"}],  # text_analyze/text_format 在 meta 映射中
+            [{"sourceCompId": "llm1", "sourcePortId": "llm-out",
+              "targetCompId": "fc", "targetPortId": "in"},
+             {"sourceCompId": "llm1", "sourcePortId": "llm-out",
+              "targetCompId": "tt", "targetPortId": "in"}])
+        # 注册内置工具（text_analyze），验证内置 + 自定义合并
+        from modules import tool_registry as _tr
+        _tr.register("text_analyze", {"name": "text_analyze"}, lambda a: "ok")
+        self.addCleanup(_tr.unregister, "text_analyze")
+        payload = orchestrator.build_payload(layout, "llm1", "hi", {})
+        names = [t["function"]["name"] for t in payload.get("tools", [])]
+        self.assertIn("text_analyze", names)     # 内置工具保留
+        self.assertIn("my_custom_tool", names)   # 自定义工具并入
+
+    def test_no_json_schema_no_response_format(self):
+        layout = _layout(
+            [{"id": "llm1", "type": "llm"},
+             {"id": "jm", "type": "json_mode"}],
+            [{"sourceCompId": "llm1", "sourcePortId": "llm-out",
+              "targetCompId": "jm", "targetPortId": "in"}])
+        payload = orchestrator.build_payload(layout, "llm1", "hi", {})
+        self.assertNotIn("response_format", payload)
+
 
 if __name__ == "__main__":
     unittest.main()

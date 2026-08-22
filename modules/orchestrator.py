@@ -202,7 +202,13 @@ def compose_messages(layout, comp_id, message):
 
 
 def build_payload(layout, comp_id, message, llm_config=None):
-    """构造 OpenAI payload（复刻前端 buildChatPayload 的 messages/tools 部分）"""
+    """构造 OpenAI payload（复刻前端 buildChatPayload 的 messages/tools 部分）
+
+    组件配置传递（重构前 buildChatPayload 支持、Task 4/5 后补齐）：
+    - json_mode 组件（直连 LLM）→ payload.response_format = json_schema
+    - function_calling 组件（直连 LLM）→ 自定义 tools 并入 payload.tools
+    - system_prompt / memory / 工具注入见 compose_messages / resolve_tools
+    """
     cfg = llm_config or {}
     tools = resolve_tools(layout, comp_id)
     payload = {
@@ -215,6 +221,38 @@ def build_payload(layout, comp_id, message, llm_config=None):
                         if cfg.get("temperature") is not None
                         else get_config()["temperature"]),
     }
-    if tools:
-        payload["tools"] = tool_registry.get_definitions_by_names(tools)
+    # 自定义工具（function_calling 组件）+ 内置工具合并
+    custom_tools = []
+    response_format = None
+    for conn in layout.get("connections", []):
+        if conn.get("sourceCompId") != comp_id:
+            continue
+        target = _find_comp(layout, conn.get("targetCompId"))
+        if not target:
+            continue
+        if target.get("type") == "function_calling" and target.get("tools"):
+            for t in target["tools"]:
+                if isinstance(t, dict) and t.get("name"):
+                    custom_tools.append({
+                        "type": "function",
+                        "function": {
+                            "name": t["name"],
+                            "description": t.get("description", ""),
+                            "parameters": t.get("parameters",
+                                                {"type": "object", "properties": {}}),
+                        },
+                    })
+        elif target.get("type") == "json_mode" and target.get("jsonSchema"):
+            response_format = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "response", "strict": True,
+                    "schema": target["jsonSchema"],
+                },
+            }
+    if tools or custom_tools:
+        payload["tools"] = (tool_registry.get_definitions_by_names(tools)
+                            + custom_tools)
+    if response_format:
+        payload["response_format"] = response_format
     return payload

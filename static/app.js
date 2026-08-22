@@ -178,6 +178,7 @@ function serializeComponent(c) {
         searchHistory: c.searchHistory, toolEnabled: c.toolEnabled,
         maxSearchRounds: c.maxSearchRounds,
         maxResults: c.maxResults,
+        skmSkills: c.skmSkills || [],
         calcHistory: c.calcHistory, codeHistory: c.codeHistory, textHistory: c.textHistory,
         orderedTools: c.orderedTools, strictMode: c.strictMode,
         currentPlan: c.currentPlan, planHistory: c.planHistory,
@@ -209,6 +210,7 @@ function deserializeComponent(cd, fallbackIndex) {
         searchHistory: cd.searchHistory || [], toolEnabled: cd.toolEnabled !== undefined ? cd.toolEnabled : true,
         maxSearchRounds: cd.maxSearchRounds,
         maxResults: cd.maxResults,
+        skmSkills: cd.skmSkills || [],
         calcHistory: cd.calcHistory || [], codeHistory: cd.codeHistory || [], textHistory: cd.textHistory || [],
         orderedTools: cd.orderedTools || [], strictMode: cd.strictMode !== undefined ? cd.strictMode : true,
         currentPlan: cd.currentPlan || null, planHistory: cd.planHistory || [],
@@ -2431,10 +2433,14 @@ function renderChatTab(el, comp) {
         btn.disabled = true; input.disabled = true;
 
         // 发送新格式：布局 + 消息（编排在后端；buildChatPayload 已删，Task 4 前端发送瘦身）
+        const layoutData = buildLayoutData();
+        // 智能模式：布局含 skill_auto_call（已开启）时启用，并沿连线收集技能列表（复刻旧 buildChatPayload）
+        const autoCallComp = layoutData.components.find(c => c.type === 'skill_auto_call' && c.toolEnabled !== false);
         const payload = {
-            layout: buildLayoutData(),      // 现有布局收集函数（serializeComponent 输出）
+            layout: layoutData,      // 现有布局收集函数（serializeComponent 输出）
             comp_id: comp.id,
             message: text,
+            session_id: getMemorySessionId(comp),   // LLM 组件会话 ID（Office 文件/记忆按会话隔离）
             llm_config: {
                 apiBase: comp.apiSettings.apiBase,
                 apiKey: comp.apiSettings.apiKey,     // 前端配置的 key 优先（项目保存的），后端 fallback 服务器 key
@@ -2444,6 +2450,21 @@ function renderChatTab(el, comp) {
                 maxResults: comp.maxResults,
             },
         };
+        if (autoCallComp && autoCallComp.smartMode !== false) {
+            payload.smart_mode = true;
+            const skmConn = layoutData.connections.find(cc =>
+                cc.sourceCompId === autoCallComp.id
+                && (cc.sourcePort === 'auto-skm-out' || cc.sourcePortId === 'auto-skm-out'));
+            if (skmConn) {
+                const skm = layoutData.components.find(x => x.id === skmConn.targetCompId);
+                if (skm && skm.type === 'skills_manager' && Array.isArray(skm.skmSkills)) {
+                    const skills = skm.skmSkills.filter(s => s.skillId);
+                    if (skills.length > 0) {
+                        payload.available_skills = skills.map(s => ({ id: s.skillId, name: s.name || s.skillId }));
+                    }
+                }
+            }
+        }
         let full = '';
 
         try {
