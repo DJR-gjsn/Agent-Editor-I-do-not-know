@@ -2437,6 +2437,7 @@ function renderChatTab(el, comp) {
             message: text,
             llm_config: {
                 apiBase: comp.apiSettings.apiBase,
+                apiKey: comp.apiSettings.apiKey,     // 前端配置的 key 优先（项目保存的），后端 fallback 服务器 key
                 model: comp.apiSettings.model,
                 maxToolRounds: comp.apiSettings.maxToolRounds,
                 maxSearchRounds: comp.maxSearchRounds,
